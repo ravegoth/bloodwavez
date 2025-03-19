@@ -1,1 +1,5 @@
 .vscode/
+/cmake-build-debug
+CMakeLists.txt
+.idea/bloodwavez.iml
+/.idea
