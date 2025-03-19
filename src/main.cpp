@@ -243,5 +243,3 @@ int main() {
     }
     return 0;  // intoarce 0 la terminarea executiei
 }
-
-// webhook test
