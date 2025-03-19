@@ -68,7 +68,25 @@ public:
     }
 };
 
+class Tile {
+public:
+    float x, y;       // coordonatele tile-ului
+    float width, height; // dimensiunile tile-ului
+    Color color;      // culoarea tile-ului
+    // constructor
+    Tile(float x, float y, float width, float height, Color color) : x(x), y(y), width(width), height(height), color(color) {}
+    
+    // metoda pentru desenarea tile-ului in fereastra
+    void draw(RenderWindow& window) {
+        RectangleShape rect(Vector2f(width, height)); // creeaza un dreptunghi cu dimensiunile specificate
+        rect.setFillColor(color);                      // seteaza culoarea
+        rect.setPosition(Vector2f(x, y));              // seteaza pozitia (folosim vector2f)
+        window.draw(rect);                             // deseneaza dreptunghiul
+    }
+};
+
 vector<Object> mapObjects;  // container pentru obiectele din harta
+vector<Tile> mapTiles;      // container pentru tile-urile din harta
 
 // -------------------------------------------------------------------- controale --------------------------------------------------------------------
 void controls() {
@@ -96,6 +114,13 @@ void init() {
     mapObjects.push_back(Object(400, 480, 50, Color::Yellow));
     mapObjects.push_back(Object(500, 300, 30, Color::Magenta));
     mapObjects.push_back(Object(600, 170, 40, Color::Cyan));
+
+    // 80x60
+    for (int i = 0; i < 84/4; i++) {
+        for (int j = 0; j < 64/4; j++) {
+            mapTiles.push_back(Tile(i * 40 - 40, j * 40 - 40, 39, 39, Color::White));
+        }
+    }
 }
 
 // -------------------------------------------------------------------- update --------------------------------------------------------------------
@@ -113,10 +138,30 @@ void update() {
             obj.x -= playerSpeed;
         }
     }
+
+    // move tiles but their x % 10 so they repeat
+    for (Tile& tile : mapTiles) {
+        if (keysPressed[static_cast<int>(Keyboard::Key::A)]) {
+            tile.x += playerSpeed;
+            if (tile.x > 800) tile.x -= 840.0f;
+            if (tile.x < -40) tile.x += 840.0f;
+        }
+        if (keysPressed[static_cast<int>(Keyboard::Key::D)]) {
+            tile.x -= playerSpeed;
+            if (tile.x > 800) tile.x -= 840.0f;
+            if (tile.x < -40) tile.x += 840.0f;
+        }
+    }
+
 }
 
 // -------------------------------------------------------------------- desenare --------------------------------------------------------------------
 void draw(RenderWindow& window) {
+    // deseneaza fiecare tile din vectorul mapTiles
+    for (Tile& tile : mapTiles) {
+        tile.draw(window);
+    }
+
     // desenare jucator: un cerc verde
     CircleShape player(10);
     player.setFillColor(Color::Green);
