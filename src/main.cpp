@@ -54,8 +54,7 @@ bool keysPressed[256] = { false }; // starea tastelor
 unsigned playerX = 400, playerY = 300; // pozitia initiala a jucatorului
 unsigned playerSpeed = 5;              // viteza de miscare a jucatorului
 Inventory playerInventory;
-int pickupRadius = 40;
-
+int pickupRadius = 40; // raza de pickup pentru obiecte
 
 // -------------------------------------------------------------------- clasa Object --------------------------------------------------------------------
 class Object {
@@ -98,6 +97,10 @@ public:
         RectangleShape rect(Vector2f(width, height)); // creeaza un dreptunghi cu dimensiunile specificate
         rect.setFillColor(color);                      // seteaza culoarea
         rect.setPosition(Vector2f(x, y));              // seteaza pozitia (folosim vector2f)
+        // white stroke
+        rect.setOutlineColor(Color::White);            // seteaza culoarea conturului
+        rect.setOutlineThickness(1);                   // seteaza grosimea conturului
+        rect.setPosition(Vector2f(x, y));              // seteaza pozitia (folosim vector2f)
         window.draw(rect);                             // deseneaza dreptunghiul
     }
 };
@@ -115,10 +118,10 @@ void controls() {
         playerY += playerSpeed;
     }
     if (keysPressed[static_cast<int>(Keyboard::Key::A)]) {  // daca tasta A este apasata
-        //playerX -= playerSpeed;
+        playerX -= playerSpeed;
     }
     if (keysPressed[static_cast<int>(Keyboard::Key::D)]) {  // daca tasta D este apasata
-        //playerX += playerSpeed;
+        playerX += playerSpeed;
     }
 }
 
@@ -142,13 +145,13 @@ void init() {
     // 80x60
     for (int i = 0; i < 84/4; i++) {
         for (int j = 0; j < 64/4; j++) {
-            mapTiles.push_back(Tile(i * 40 - 40, j * 40 - 40, 39, 39, Color::White));
+            mapTiles.push_back(Tile(i * 40 - 40, j * 40 - 40, 39, 39, Color::Black));
         }
     }
 }
 
 // -------------------------------------------------------------------- update --------------------------------------------------------------------
-void update() {
+void update(RenderWindow& window) {
     // limiteaza pozitia jucatorului in fereastra
     if (playerY < 0) playerY = 0;
     if (playerY > 600) playerY = 600;
@@ -179,14 +182,14 @@ void update() {
     if (keysPressed[static_cast<int>(Keyboard::Key::E)]) {
         for (auto& worldItem : worldItems) {
             if (worldItem.pickedUp) continue;
-            float dist = distance(Vector2f(playerX, playerY), Vector2f(worldItem.obj.x, worldItem.obj.y));
+            float dist = distance(Vector2f(200, playerY), Vector2f(worldItem.obj.x, worldItem.obj.y));
+    
             if (dist < pickupRadius) { // pickup radius
                 playerInventory.pickUp(worldItem.item);
                 worldItem.pickedUp = true;
             }
         }
     }
-    
 
     // move tiles but their x % 10 so they repeat
     for (Tile& tile : mapTiles) {
@@ -214,15 +217,17 @@ void draw(RenderWindow& window) {
     // desenare jucator: un cerc verde
     CircleShape player(10);
     player.setFillColor(Color::Green);
-    player.setPosition(Vector2f(playerX, playerY));
+    player.setPosition(Vector2f(200, playerY)); // pozitia jucatorului
     window.draw(player);
 
     // desenare sabie: un dreptunghi rosu indiat de mouse
     RectangleShape sword(Vector2f(100, 5));
     sword.setFillColor(Color::Red);
-    sword.setPosition(Vector2f(0, playerY));
-    sword.setOrigin(Vector2f(0, 2.5f));
-    float angle = atan2(mouseY - playerY, mouseX - playerX) * 180 / 3.14159f;
+    sword.setPosition(Vector2f(200, playerY)); // pozitia jucatorului
+    sword.setOrigin(Vector2f(0, 2.5)); // seteaza originea dreptunghiului la mijlocul lui pe verticala
+    
+    float angle = atan2(mouseY - playerY, mouseX - 200) * 180 / 3.14159; // calculeaza unghiul in radiani si il converteste in grade
+
     sword.setRotation(degrees(angle)); // conversie in grade (sf::degrees returnează un sf::Angle)
     window.draw(sword);
 
@@ -231,12 +236,12 @@ void draw(RenderWindow& window) {
         obj.draw(window);
     }
 
+    // deseneaza fiecare obiect din vectorul worldItems
     for (auto& worldItem : worldItems) {
         if (!worldItem.pickedUp) {
             worldItem.obj.draw(window);
         }
     }
-    
 }
 
 // -------------------------------------------------------------------- main --------------------------------------------------------------------
@@ -293,7 +298,7 @@ int main() {
 
         window.clear();     // sterge continutul ferestrei
         controls();         // proceseaza input-ul jucatorului
-        update();           // actualizeaza starea jocului
+        update(window);       // actualizeaza starea jocului
         draw(window);       // deseneaza totul in fereastra
         window.display();   // afiseaza continutul desenat pe ecran
     }
