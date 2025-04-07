@@ -11,6 +11,10 @@
 #include <windows.h>          // pentru api-ul windows (winmain, ascundere fereastra cmd)
 #include <tlhelp32.h>         // pentru operatii pe procese si thread-uri in windows
 
+
+// ------ alte fisiere
+#include "Inventory.hpp"
+
 // -------------------------------------------------------------------- sfml --------------------------------------------------------------------
 #include <SFML/Graphics.hpp>  // pentru grafica (desenare forme, sprites, etc.)
 #include <SFML/Window.hpp>    // pentru manipularea ferestrelor si evenimentelor
@@ -49,6 +53,9 @@ bool keysPressed[256] = { false }; // starea tastelor
 
 unsigned playerX = 400, playerY = 300; // pozitia initiala a jucatorului
 unsigned playerSpeed = 5;              // viteza de miscare a jucatorului
+Inventory playerInventory;
+int pickupRadius = 40;
+
 
 // -------------------------------------------------------------------- clasa Object --------------------------------------------------------------------
 class Object {
@@ -67,6 +74,16 @@ public:
         window.draw(circle);                         // deseneaza cercul
     }
 };
+
+struct ItemObject {
+    Object obj;
+    std::shared_ptr<Item> item;
+    bool pickedUp = false;
+
+    ItemObject(Object obj, std::shared_ptr<Item> item) : obj(obj), item(item) {}
+};
+
+vector<ItemObject> worldItems;
 
 class Tile {
 public:
@@ -90,6 +107,7 @@ vector<Tile> mapTiles;      // container pentru tile-urile din harta
 
 // -------------------------------------------------------------------- controale --------------------------------------------------------------------
 void controls() {
+    //todo player sa se miste cu playerX dar camera sa "urmareasca" dupa player
     if (keysPressed[static_cast<int>(Keyboard::Key::W)]) {  // daca tasta W este apasata
         playerY -= playerSpeed;
     }
@@ -97,10 +115,10 @@ void controls() {
         playerY += playerSpeed;
     }
     if (keysPressed[static_cast<int>(Keyboard::Key::A)]) {  // daca tasta A este apasata
-        playerX -= playerSpeed;
+        //playerX -= playerSpeed;
     }
     if (keysPressed[static_cast<int>(Keyboard::Key::D)]) {  // daca tasta D este apasata
-        playerX += playerSpeed;
+        //playerX += playerSpeed;
     }
 }
 
@@ -114,6 +132,12 @@ void init() {
     mapObjects.push_back(Object(400, 480, 50, Color::Yellow));
     mapObjects.push_back(Object(500, 300, 30, Color::Magenta));
     mapObjects.push_back(Object(600, 170, 40, Color::Cyan));
+
+    worldItems.push_back(ItemObject(Object(150, 150, 10, Color::Red), std::make_shared<Item>("Sword", ItemType::Weapon)));
+    worldItems.push_back(ItemObject(Object(250, 250, 10, Color::Cyan), std::make_shared<Item>("Dark Gloves", ItemType::Equipment)));
+    worldItems.push_back(ItemObject(Object(350, 350, 10, Color::Magenta), std::make_shared<Item>("Rare Gloves", ItemType::Equipment)));
+    worldItems.push_back(ItemObject(Object(450, 450, 10, Color::Yellow), std::make_shared<Item>("Gold Coin", ItemType::Coin, 10)));
+
 
     // 80x60
     for (int i = 0; i < 84/4; i++) {
@@ -138,6 +162,31 @@ void update() {
             obj.x -= playerSpeed;
         }
     }
+
+    for (auto& obj : worldItems) {
+        if(obj.pickedUp)
+        {
+            continue;
+        }
+        if (keysPressed[static_cast<int>(Keyboard::Key::A)]) {
+            obj.obj.x += playerSpeed;
+        }
+        if (keysPressed[static_cast<int>(Keyboard::Key::D)]) {
+            obj.obj.x -= playerSpeed;
+        }
+    }
+
+    if (keysPressed[static_cast<int>(Keyboard::Key::E)]) {
+        for (auto& worldItem : worldItems) {
+            if (worldItem.pickedUp) continue;
+            float dist = distance(Vector2f(playerX, playerY), Vector2f(worldItem.obj.x, worldItem.obj.y));
+            if (dist < pickupRadius) { // pickup radius
+                playerInventory.pickUp(worldItem.item);
+                worldItem.pickedUp = true;
+            }
+        }
+    }
+    
 
     // move tiles but their x % 10 so they repeat
     for (Tile& tile : mapTiles) {
@@ -165,15 +214,15 @@ void draw(RenderWindow& window) {
     // desenare jucator: un cerc verde
     CircleShape player(10);
     player.setFillColor(Color::Green);
-    player.setPosition(Vector2f(200, playerY));
+    player.setPosition(Vector2f(playerX, playerY));
     window.draw(player);
 
     // desenare sabie: un dreptunghi rosu indiat de mouse
     RectangleShape sword(Vector2f(100, 5));
     sword.setFillColor(Color::Red);
-    sword.setPosition(Vector2f(200, playerY));
+    sword.setPosition(Vector2f(0, playerY));
     sword.setOrigin(Vector2f(0, 2.5f));
-    float angle = atan2(mouseY - playerY, mouseX - 200) * 180 / 3.14159f;
+    float angle = atan2(mouseY - playerY, mouseX - playerX) * 180 / 3.14159f;
     sword.setRotation(degrees(angle)); // conversie in grade (sf::degrees returnează un sf::Angle)
     window.draw(sword);
 
@@ -181,6 +230,13 @@ void draw(RenderWindow& window) {
     for (Object& obj : mapObjects) {
         obj.draw(window);
     }
+
+    for (auto& worldItem : worldItems) {
+        if (!worldItem.pickedUp) {
+            worldItem.obj.draw(window);
+        }
+    }
+    
 }
 
 // -------------------------------------------------------------------- main --------------------------------------------------------------------
