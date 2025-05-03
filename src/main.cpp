@@ -71,6 +71,8 @@ float dashSpeed = 8; // viteza de dash
 float dashDuration = 30; // durata dash-ului in cadre
 int dashCooldown = 60*3; // cooldown-ul dash-ului in frameuri
 
+int balance = 0; // numarul de $$$
+
 // -------------------------------------------------------------------- obiecte --------------------------------------------------------------------
 
 // obiect abstract (nu exista scop inca)
@@ -105,7 +107,7 @@ vector<ItemObject> worldItems;
 class SoundManager {
 private:
     map<string, SoundBuffer> soundBuffers; // mapa pentru a stoca buffer-ele de sunet incarcate
-    map<string, Sound> sounds;            // mapa pentru a stoca sunetele
+    map<string, std::shared_ptr<Sound>> sounds; // mapa pentru a stoca pointerii la sunete
 
     // constructor privat pentru a preveni instantierea directa
     SoundManager() {}
@@ -122,33 +124,43 @@ public:
 
     // metoda pentru a incarca un sunet
     void loadSound(const string& name, const string& filename) {
+        string full_filename = "./res/" + filename + ".wav"; // adauga calea catre fisier
         if (soundBuffers.find(name) == soundBuffers.end()) {
             SoundBuffer buffer;
-            if (!buffer.loadFromFile(filename)) {
+            if (!buffer.loadFromFile(full_filename)) { // incarca fisierul
                 cout << "Failed to load sound: " << filename << endl;
                 return;
             }
             soundBuffers[name] = buffer; // adauga buffer-ul in mapa
-            sounds[name].setBuffer(soundBuffers[name]); // asociaza buffer-ul cu sunetul
+            sounds[name] = std::make_shared<sf::Sound>(soundBuffers[name]); // asociaza buffer-ul cu un pointer la sunet
             cout << "Loaded sound: " << filename << endl;
+
+            // do not play sound when loaded
+            sounds[name]->setVolume(0); // seteaza volumul la 0 pentru a nu reda sunetul la incarcare
         }
     }
 
     // metoda pentru a reda un sunet
-    void playSound(const string& name) {
+    void playSound(const string& name, int volume = 100) {
         if (sounds.find(name) != sounds.end()) {
-            sounds[name].play();
+            // seteaza volumul la 100% (sau orice altceva vrei)
+            sounds[name]->setVolume(volume); // seteaza volumul
+            sounds[name]->play();
         } else {
-            cout << "Sound not found: " << name << endl;
+            cout << "Sound not found for playing: " << name << endl;
+
+            cout << "Trying to load sound: " << name << endl;
+
+            loadSound(name, name); // incarca sunetul daca nu este gasit
         }
     }
 
     // metoda pentru a opri un sunet
     void stopSound(const string& name) {
         if (sounds.find(name) != sounds.end()) {
-            sounds[name].stop();
+            sounds[name]->stop();
         } else {
-            cout << "Sound not found: " << name << endl;
+            cout << "Sound not found for stopping: " << name << endl;
         }
     }
 
@@ -284,10 +296,99 @@ class Enemy {
 
 };
 
+// clasa de bani
+class Coin {
+private:
+    float x, y;       // coordonatele monedei
+    int animation;    // animatia monedei (de la 1 la 100)
+    float vx, vy; // viteza pe axa x si y (nu e folosita inca)
+    bool toBeDeleted = false; // flag pentru autodistrugere
+
+public:
+    // constructor
+    Coin(float x, float y) : x(x), y(y) {
+        animation = rand() % 100 + 1; // genereaza o animatie aleatoare intre 1 si 100
+        vx = rand_uniform(-2, 2); // genereaza o viteza aleatoare pe axa x
+        vy = rand_uniform(-2, 2); // genereaza o viteza aleatoare pe axa y
+        toBeDeleted = false; // seteaza flag-ul de autodistrugere la false
+    }
+
+    // getters
+    float getX() const { return x; }
+    float getY() const { return y; }
+    int getAnimation() const { return animation; }
+
+    // setters
+    void setX(float x) { this->x = x; }
+    void setY(float y) { this->y = y; }
+    void setAnimation(int animation) { this->animation = animation; }
+
+    // update
+    void update() {
+        // actualizeaza pozitia monedei in functie de viteza
+        x += vx;
+        y += vy;
+
+        // verifica daca moneda a iesit din ecran
+        if (x < 0 || x > 800 || y < 0 || y > 600) {
+            vx = -vx; // inverseaza viteza pe axa x
+            vy = -vy; // inverseaza viteza pe axa y
+        }
+
+        if (x < 0) x = 0, vx += 1;
+        if (x > 800) x = 800, vx -= 1;
+        if (y < 0) y = 0, vy += 1;
+        if (y > 600) y = 600, vy -= 1;
+
+        // daca distanta catre player < 50, go to player
+        if (distance(Vector2f(x, y), Vector2f(200, playerY)) < 50) {
+            vx = (200 - x) / 10; // seteaza viteza pe axa x
+            vy = (playerY - y) / 10; // seteaza viteza pe axa y
+        }
+
+        // daca distanta catre player < 10, da bani si autodistrugere
+        if (distance(Vector2f(x, y), Vector2f(200, playerY)) < 10) {
+            balance += 1; // adauga 1 la balanta
+            toBeDeleted = true; // seteaza flag-ul de autodistrugere la true
+            SoundManager::getInstance().playSound("pickup_coin"); // reda sunetul de pickup
+            cout << "DEBUG: played sound cuz x=" << x << " y=" << y << ", dist = " << distance(Vector2f(x, y), Vector2f(200, playerY)) << endl;
+        }
+
+        // frictiune 
+        vx *= 0.96; // aplica frictiunea pe axa x
+        vy *= 0.96; // aplica frictiunea pe axa y
+
+        // se misca in functie de player
+        x += playerVx;
+        // y += playerVy;
+    }
+
+    // metoda pentru desenarea monedei
+    void draw(RenderWindow& window) {
+        // selecteaza textura in functie de animatie
+        Texture& texture = (animation <= 50) 
+            ? TextureManager::getInstance().find("coin1") 
+            : TextureManager::getInstance().find("coin2");
+
+        Sprite sprite(texture);
+        sprite.setPosition(Vector2f(x, y)); // seteaza pozitia sprite-ului
+        sprite.setScale(Vector2f(10.0f / texture.getSize().x, 10.0f / texture.getSize().y)); // seteaza scalarea sprite-ului
+        window.draw(sprite); // deseneaza sprite-ul
+
+        // actualizeaza animatia
+        animation = (animation % 100) + 1;
+    }
+
+    // getters setters deletion
+    bool isToBeDeleted() const { return toBeDeleted; } // getter pentru flag-ul de autodistrugere
+    void setToBeDeleted(bool toBeDeleted) { this->toBeDeleted = toBeDeleted; } // setter pentru flag-ul de autodistrugere
+};
+
 // -------------------------------------------------------------------- containere --------------------------------------------------------------------
 
 vector<Object> mapObjects;  // container pentru obiectele din harta
 vector<Tile> mapTiles;      // container pentru tile-urile din harta
+vector<Coin> mapCoins;     // container pentru monedele din harta
 
 // -------------------------------------------------------------------- controale --------------------------------------------------------------------
 void controls() {
@@ -317,6 +418,11 @@ void controls() {
     //     exit(0); // iese din program
     // }
 
+    // debug: C = spawns coins at 500, 300
+    if (keysPressed[static_cast<int>(Keyboard::Key::C)]) {  // daca tasta C este apasata
+        mapCoins.push_back(Coin(500, 300)); // adauga o moneda la coordonatele 500, 300
+    }
+
     // cout << "dashing data: " << "dashing: " << dashing << " canDash: " << canDash << " dashDuration: " << dashDuration << " dashCooldown: " << dashCooldown << endl;
 }
 
@@ -335,6 +441,9 @@ void init() {
     TextureManager::getInstance().justLoad("player_dash_mirror");
     // weapon textures
     TextureManager::getInstance().justLoad("weapon_basic_sword");
+    // coin textures
+    TextureManager::getInstance().justLoad("coin1");
+    TextureManager::getInstance().justLoad("coin2");
 
     srand(time(NULL));  // initializeaza generatorul de numere aleatorii
     // adauga obiecte in containerul mapObjects
@@ -523,6 +632,25 @@ void drawPlayerWeapon(RenderWindow& window) {
     }
 }
 
+void drawCoins(RenderWindow& window) {
+    for (Coin& coin : mapCoins) {
+        coin.update(); // actualizeaza moneda
+        coin.draw(window); // deseneaza moneda
+
+        // deja exista o limitare in obiect dar asta nu strica
+        if (coin.getX() < 0) coin.setX(0); // limiteaza moneda pe axa x
+        if (coin.getX() > 800) coin.setX(800); // limiteaza moneda pe axa x
+        if (coin.getY() < 0) coin.setY(0); // limiteaza moneda pe axa y
+        if (coin.getY() > 600) coin.setY(600); // limiteaza moneda pe axa y
+
+        // delete moneda daca este autodistrusa
+        if (coin.isToBeDeleted()) {
+            auto it = remove_if(mapCoins.begin(), mapCoins.end(), [](Coin& c) { return c.isToBeDeleted(); });
+            mapCoins.erase(it, mapCoins.end()); // sterge moneda din vector
+        }
+    }
+}
+
 void draw(RenderWindow& window) {
     // deseneaza fiecare tile din vectorul mapTiles
     for (Tile& tile : mapTiles) {
@@ -545,6 +673,8 @@ void draw(RenderWindow& window) {
             worldItem.obj.draw(window);
         }
     }
+
+    drawCoins(window); // desenare monede
 }
 
 // -------------------------------------------------------------------- main --------------------------------------------------------------------
