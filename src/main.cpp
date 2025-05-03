@@ -73,6 +73,14 @@ int dashCooldown = 60*3; // cooldown-ul dash-ului in frameuri
 
 int balance = 0; // numarul de $$$
 int xp = 0; // xp-ul jucatorului
+int level = 1; // starting level
+int levelXP = 100; // xp-ul necesar pentru a urca la nivelul urmator
+
+int playerHealth = 100; // viata jucatorului
+int playerMaxHealth = 100; // viata maxima a jucatorului
+int playerArmor = 0; // armura jucatorului
+int playerMaxArmor = 100; // armura maxima a jucatorului
+int playerDamageMultiplier = 1; // muliplicatorul de damage al jucatorului care va fi inmultit cu damage-ul armei
 
 // -------------------------------------------------------------------- obiecte --------------------------------------------------------------------
 
@@ -544,6 +552,10 @@ void init() {
     // exp textures
     TextureManager::getInstance().justLoad("exp1");
     TextureManager::getInstance().justLoad("exp2");
+    // icons
+    TextureManager::getInstance().justLoad("xp");
+    TextureManager::getInstance().justLoad("shield");
+    TextureManager::getInstance().justLoad("heart");
 
     srand(time(NULL));  // initializeaza generatorul de numere aleatorii
     // adauga obiecte in containerul mapObjects
@@ -665,6 +677,29 @@ void update(RenderWindow& window) {
         if (tile.getX() > 800) tile.setX(tile.getX() - 840.0f);
         if (tile.getX() < -40) tile.setX(tile.getX() + 840.0f);
     }
+
+    // xp mechanics
+    if (xp >= levelXP) {
+        level += 1; // creste nivelul jucatorului
+        xp = 0; // resetare xp
+        levelXP += levelXP / 9;
+
+        // creste armura maxima
+        playerMaxArmor += 5;
+        
+        // creste viata maxima
+        playerMaxHealth += 5; 
+
+        // creste viata curenta cu 50%
+        playerHealth += playerMaxHealth / 2; // creste viata curenta 
+        if (playerHealth > playerMaxHealth) playerHealth = playerMaxHealth; // limiteaza viata curenta la maxima
+        
+        // creste armura curenta cu 50%
+        playerArmor += playerMaxArmor / 2; // creste armura curenta
+        if (playerArmor > playerMaxArmor) playerArmor = playerMaxArmor; // limiteaza armura curenta la maxima
+
+        playerDamageMultiplier += 0.1; // creste multiplicatorul de damage
+    }
 }
 
 // -------------------------------------------------------------------- desenare --------------------------------------------------------------------
@@ -764,6 +799,71 @@ void drawExpOrbs(RenderWindow& window) {
     }
 }
 
+void drawBars(RenderWindow& window) {
+    // draw health bar
+    RectangleShape healthBar(Vector2f(200, 10)); // creeaza un dreptunghi cu dimensiunile specificate
+    healthBar.setFillColor(Color::Green); // seteaza culoarea
+    healthBar.setPosition(Vector2f(10, 10)); // seteaza pozitia (folosim vector2f)
+    healthBar.setSize(Vector2f(200 * (float)((float)playerHealth / (float)playerMaxHealth), 10)); // seteaza dimensiunile
+    window.draw(healthBar); // deseneaza dreptunghiul
+
+    // draw armor bar
+    RectangleShape armorBar(Vector2f(200, 20)); // creeaza un dreptunghi cu dimensiunile specificate
+    armorBar.setFillColor(Color::Blue); // seteaza culoarea
+    armorBar.setPosition(Vector2f(10, 30)); // seteaza pozitia (folosim vector2f)
+    armorBar.setSize(Vector2f(200 * (float)((float)playerArmor / (float)playerMaxArmor), 10)); // seteaza dimensiunile
+    window.draw(armorBar); // deseneaza dreptunghiul
+
+    // draw xp bar
+    RectangleShape xpBar(Vector2f(200, 30)); // creeaza un dreptunghi cu dimensiunile specificate
+    xpBar.setFillColor(Color::Yellow); // seteaza culoarea
+    xpBar.setPosition(Vector2f(10, 50)); // seteaza pozitia (folosim vector2f)
+    xpBar.setSize(Vector2f(200 * (float)((float)xp / (float)levelXP), 10)); // seteaza dimensiunile
+    window.draw(xpBar); // deseneaza dreptunghiul
+
+    // draw the 2px strok for each bar above
+    RectangleShape healthBarStroke(Vector2f(200, 10)); // creeaza un dreptunghi cu dimensiunile specificate
+    healthBarStroke.setFillColor(Color::Transparent); // seteaza culoarea
+    RectangleShape armorBarStroke(Vector2f(200, 10)); // creeaza un dreptunghi cu dimensiunile specificate
+    armorBarStroke.setFillColor(Color::Transparent); // seteaza culoarea
+    RectangleShape xpBarStroke(Vector2f(200, 10)); // creeaza un dreptunghi cu dimensiunile specificate
+    xpBarStroke.setFillColor(Color::Transparent); // seteaza culoarea
+
+    healthBarStroke.setOutlineThickness(2); // seteaza grosimea conturului
+    healthBarStroke.setOutlineColor(Color::Black); // seteaza culoarea conturului
+    armorBarStroke.setOutlineThickness(2); // seteaza grosimea conturului
+    armorBarStroke.setOutlineColor(Color::Black); // seteaza culoarea conturului
+    xpBarStroke.setOutlineThickness(2); // seteaza grosimea conturului
+    xpBarStroke.setOutlineColor(Color::Black); // seteaza culoarea conturului
+
+    healthBarStroke.setPosition(Vector2f(10, 10)); // seteaza pozitia (folosim vector2f)
+    armorBarStroke.setPosition(Vector2f(10, 30)); // seteaza pozitia (folosim vector2f)
+    xpBarStroke.setPosition(Vector2f(10, 50)); // seteaza pozitia (folosim vector2f)
+
+    window.draw(healthBarStroke); // deseneaza dreptunghiul
+    window.draw(armorBarStroke); // deseneaza dreptunghiul
+    window.draw(xpBarStroke); // deseneaza dreptunghiul
+
+    // draw icons next to the bars
+    Texture& heartTexture = TextureManager::getInstance().find("heart");
+    Sprite heartSprite(heartTexture);
+    heartSprite.setPosition(Vector2f(217, 11-5)); // seteaza pozitia (folosim vector2f)
+    heartSprite.setScale(Vector2f(0.03f, 0.03f)); // seteaza scalarea sprite-ului
+    window.draw(heartSprite); // deseneaza sprite-ul
+
+    Texture& shieldTexture = TextureManager::getInstance().find("shield");
+    Sprite shieldSprite(shieldTexture);
+    shieldSprite.setPosition(Vector2f(217, 31-5)); // seteaza pozitia (folosim vector2f)
+    shieldSprite.setScale(Vector2f(0.03f, 0.03f)); // seteaza scalarea sprite-ului
+    window.draw(shieldSprite); // deseneaza sprite-ul
+
+    Texture& xpTexture = TextureManager::getInstance().find("xp");
+    Sprite xpSprite(xpTexture);
+    xpSprite.setPosition(Vector2f(217, 51-5)); // seteaza pozitia (folosim vector2f)
+    xpSprite.setScale(Vector2f(0.02f, 0.02f)); // seteaza scalarea sprite-ului
+    window.draw(xpSprite); // deseneaza sprite-ul
+}
+
 void draw(RenderWindow& window) {
     // deseneaza fiecare tile din vectorul mapTiles
     for (Tile& tile : mapTiles) {
@@ -789,6 +889,9 @@ void draw(RenderWindow& window) {
 
     drawExpOrbs(window); // desenare orb-uri de exp
     drawCoins(window); // desenare monede
+
+    // those needs 2 be on top
+    drawBars(window); // desenare bare de viata, armura si xp
 }
 
 // -------------------------------------------------------------------- main --------------------------------------------------------------------
