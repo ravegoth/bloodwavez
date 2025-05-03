@@ -72,6 +72,7 @@ float dashDuration = 30; // durata dash-ului in cadre
 int dashCooldown = 60*3; // cooldown-ul dash-ului in frameuri
 
 int balance = 0; // numarul de $$$
+int xp = 0; // xp-ul jucatorului
 
 // -------------------------------------------------------------------- obiecte --------------------------------------------------------------------
 
@@ -384,11 +385,102 @@ public:
     void setToBeDeleted(bool toBeDeleted) { this->toBeDeleted = toBeDeleted; } // setter pentru flag-ul de autodistrugere
 };
 
+// clasa de exp
+class ExpOrb {
+private:
+    float x, y;       // coordonatele orb-ului
+    int animation;    // animatia orb-ului (de la 1 la 100)
+    float vx, vy;     // viteza pe axa x si y
+    bool toBeDeleted = false; // flag pentru autodistrugere
+    Angle towardsPlayerAngle = sf::radians(0); // unghiul catre player
+public:
+    // constructor
+    ExpOrb(float x, float y) : x(x), y(y) {
+        animation = rand() % 100 + 1; // genereaza o animatie aleatoare intre 1 si 100
+        vx = rand_uniform(-5, 5); // genereaza o viteza aleatoare pe axa x
+        vy = rand_uniform(-5, 5); // genereaza o viteza aleatoare pe axa y
+        toBeDeleted = false; // seteaza flag-ul de autodistrugere la false
+    }
+
+    // getters
+    float getX() const { return x; }
+    float getY() const { return y; }
+    int getAnimation() const { return animation; }
+
+    // setters
+    void setX(float x) { this->x = x; }
+    void setY(float y) { this->y = y; }
+    void setAnimation(int animation) { this->animation = animation; }
+
+    // update
+    void update() {
+        // calculeaza viteza catre player
+        float dx = 200 - x;
+        float dy = playerY - y;
+        float dist = sqrt(dx * dx + dy * dy);
+
+        if (dist > 5) {
+            float angle = atan2(dy, dx); // calculeaza unghiul catre player
+            towardsPlayerAngle = sf::radians(angle); // seteaza unghiul catre player folosind sfml::Angle
+            vx += cos(angle) / 2; // seteaza viteza pe axa x
+            vy += sin(angle) / 2; // seteaza viteza pe axa y
+
+        }
+        // limit viteza orb-ului
+        if (vx > 5) vx = 5;
+        if (vx < -5) vx = -5;
+        if (vy > 5) vy = 5;
+        if (vy < -5) vy = -5;
+
+        // actualizeaza pozitia orb-ului
+        x += vx;
+        y += vy;
+
+        // player
+        x += playerVx;
+        // y += playerVy;
+
+        // daca distanta catre player < 10, creste xp level si autodistrugere
+        if (distance(Vector2f(x, y), Vector2f(200, playerY)) < 10) {
+            // Creste nivelul de experienta
+            xp += rand() % 10 + 1; // adauga un numar aleatoriu de xp (1-10)
+            cout << "DEBUG: picked up exp orb, xp = " << xp << endl; // afiseaza xp-ul
+            toBeDeleted = true; // seteaza flag-ul de autodistrugere la true
+            SoundManager::getInstance().playSound("pickup_exp"); // reda sunetul de pickup
+        }
+
+        // frictiune mai mare decat Coin
+        vx *= 0.96; // aplica frictiunea pe axa x
+        vy *= 0.96; // aplica frictiunea pe axa y
+    }
+
+    // metoda pentru desenarea orb-ului
+    void draw(RenderWindow& window) {
+        // selecteaza textura in functie de animatie
+        Texture& texture = (animation <= 50) 
+            ? TextureManager::getInstance().find("exp1") 
+            : TextureManager::getInstance().find("exp2");
+
+        Sprite sprite(texture);
+        sprite.setPosition(Vector2f(x, y)); // seteaza pozitia sprite-ului
+        sprite.setScale(Vector2f(10.0f / texture.getSize().x, 10.0f / texture.getSize().y)); // seteaza scalarea sprite-ului
+        window.draw(sprite); // deseneaza sprite-ul
+
+        // actualizeaza animatia
+        animation = (animation % 100) + 1;
+    }
+
+    // getters setters deletion
+    bool isToBeDeleted() const { return toBeDeleted; } // getter pentru flag-ul de autodistrugere
+    void setToBeDeleted(bool toBeDeleted) { this->toBeDeleted = toBeDeleted; } // setter pentru flag-ul de autodistrugere
+};
+
 // -------------------------------------------------------------------- containere --------------------------------------------------------------------
 
 vector<Object> mapObjects;  // container pentru obiectele din harta
 vector<Tile> mapTiles;      // container pentru tile-urile din harta
 vector<Coin> mapCoins;     // container pentru monedele din harta
+vector<ExpOrb> mapExpOrbs; // container pentru orb-urile de exp din harta
 
 // -------------------------------------------------------------------- controale --------------------------------------------------------------------
 void controls() {
@@ -423,6 +515,11 @@ void controls() {
         mapCoins.push_back(Coin(500, 300)); // adauga o moneda la coordonatele 500, 300
     }
 
+    // debug: V = spawns exp orbs at 500, 300
+    if (keysPressed[static_cast<int>(Keyboard::Key::V)]) {  // daca tasta V este apasata
+        mapExpOrbs.push_back(ExpOrb(500, 300)); // adauga un exp orb la coordonatele 500, 300
+    }
+
     // cout << "dashing data: " << "dashing: " << dashing << " canDash: " << canDash << " dashDuration: " << dashDuration << " dashCooldown: " << dashCooldown << endl;
 }
 
@@ -444,6 +541,9 @@ void init() {
     // coin textures
     TextureManager::getInstance().justLoad("coin1");
     TextureManager::getInstance().justLoad("coin2");
+    // exp textures
+    TextureManager::getInstance().justLoad("exp1");
+    TextureManager::getInstance().justLoad("exp2");
 
     srand(time(NULL));  // initializeaza generatorul de numere aleatorii
     // adauga obiecte in containerul mapObjects
@@ -651,6 +751,19 @@ void drawCoins(RenderWindow& window) {
     }
 }
 
+void drawExpOrbs(RenderWindow& window) {
+    for (ExpOrb& orb : mapExpOrbs) {
+        orb.update(); // actualizeaza orb-ul
+        orb.draw(window); // deseneaza orb-ul
+
+        // delete orb daca este autodistrus
+        if (orb.isToBeDeleted()) {
+            auto it = remove_if(mapExpOrbs.begin(), mapExpOrbs.end(), [](ExpOrb& o) { return o.isToBeDeleted(); });
+            mapExpOrbs.erase(it, mapExpOrbs.end()); // sterge orb-ul din vector
+        }
+    }
+}
+
 void draw(RenderWindow& window) {
     // deseneaza fiecare tile din vectorul mapTiles
     for (Tile& tile : mapTiles) {
@@ -674,6 +787,7 @@ void draw(RenderWindow& window) {
         }
     }
 
+    drawExpOrbs(window); // desenare orb-uri de exp
     drawCoins(window); // desenare monede
 }
 
