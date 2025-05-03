@@ -102,6 +102,68 @@ struct ItemObject {
 
 vector<ItemObject> worldItems;
 
+class SoundManager {
+private:
+    map<string, SoundBuffer> soundBuffers; // mapa pentru a stoca buffer-ele de sunet incarcate
+    map<string, Sound> sounds;            // mapa pentru a stoca sunetele
+
+    // constructor privat pentru a preveni instantierea directa
+    SoundManager() {}
+
+public:
+    // singleton pattern
+    SoundManager(const SoundManager&) = delete;
+    SoundManager& operator=(const SoundManager&) = delete;
+
+    static SoundManager& getInstance() {
+        static SoundManager instance; // instanta unica
+        return instance;
+    }
+
+    // metoda pentru a incarca un sunet
+    void loadSound(const string& name, const string& filename) {
+        if (soundBuffers.find(name) == soundBuffers.end()) {
+            SoundBuffer buffer;
+            if (!buffer.loadFromFile(filename)) {
+                cout << "Failed to load sound: " << filename << endl;
+                return;
+            }
+            soundBuffers[name] = buffer; // adauga buffer-ul in mapa
+            sounds[name].setBuffer(soundBuffers[name]); // asociaza buffer-ul cu sunetul
+            cout << "Loaded sound: " << filename << endl;
+        }
+    }
+
+    // metoda pentru a reda un sunet
+    void playSound(const string& name) {
+        if (sounds.find(name) != sounds.end()) {
+            sounds[name].play();
+        } else {
+            cout << "Sound not found: " << name << endl;
+        }
+    }
+
+    // metoda pentru a opri un sunet
+    void stopSound(const string& name) {
+        if (sounds.find(name) != sounds.end()) {
+            sounds[name].stop();
+        } else {
+            cout << "Sound not found: " << name << endl;
+        }
+    }
+
+    // metoda pentru a verifica daca un sunet este incarcat
+    bool isLoaded(const string& name) {
+        return soundBuffers.find(name) != soundBuffers.end();
+    }
+
+    // destructor
+    ~SoundManager() {
+        sounds.clear();
+        soundBuffers.clear();
+    }
+};
+
 class TextureManager {
 private:
     map<std::string, sf::Texture> textures; // mapa pentru a stoca texturile incarcate
