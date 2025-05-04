@@ -685,7 +685,7 @@ void update(RenderWindow& window) {
         levelXP += levelXP / 9;
 
         // creste armura maxima
-        playerMaxArmor += 5;
+        playerMaxArmor += rand() % 10 + 2; // adauga un numar aleatoriu de armura maxima (1-5)
         
         // creste viata maxima
         playerMaxHealth += 5; 
@@ -698,7 +698,7 @@ void update(RenderWindow& window) {
         playerArmor += playerMaxArmor / 2; // creste armura curenta
         if (playerArmor > playerMaxArmor) playerArmor = playerMaxArmor; // limiteaza armura curenta la maxima
 
-        playerDamageMultiplier += 0.1; // creste multiplicatorul de damage
+        playerDamageMultiplier += rand_uniform(0.1f, 0.3f); // creste damage multiplier-ul
     }
 }
 
@@ -864,6 +864,67 @@ void drawBars(RenderWindow& window) {
     window.draw(xpSprite); // deseneaza sprite-ul
 }
 
+void drawText(RenderWindow& window) {
+    // show lvl and money under the bars
+    Font font;
+    if (!font.openFromFile("./res/PixelPurl.ttf")) {
+        cout << "Failed to load font: PixelPurl.ttf" << endl;
+        return;
+    }
+
+    Text levelText(font, "LVL " + to_string(level) + " | " + to_string(balance) + "$", 27); // creeaza un text cu font-ul specificat
+    levelText.setFont(font); // seteaza font-ul text-ului
+    levelText.setFillColor(Color::White);
+    levelText.setPosition(Vector2f(10, 60));
+
+    // Create shadow text
+    Text shadowText = levelText; // Copy the original text properties
+    shadowText.setFillColor(Color::Black); // Set shadow color
+    shadowText.setPosition(levelText.getPosition() + Vector2f(2, 2)); // Offset the shadow
+
+    window.draw(shadowText); // Draw the shadow first
+    window.draw(levelText); // Draw the original text on top
+
+    // show health/max health and armor/max and xp/next xp to the right of the bars
+    Text healthText(font, to_string(playerHealth) + "/" + to_string(playerMaxHealth), 18);
+    healthText.setFont(font);
+    healthText.setFillColor(Color::White);
+    healthText.setPosition(Vector2f(240, 8-5)); // Position to the right of the health bar icon
+
+    Text armorText(font, to_string(playerArmor) + "/" + to_string(playerMaxArmor), 18);
+    armorText.setFont(font);
+    armorText.setFillColor(Color::White);
+    armorText.setPosition(Vector2f(240, 28-5)); // Position to the right of the armor bar icon
+
+    Text xpText(font, to_string(xp) + "/" + to_string(levelXP), 18);
+    xpText.setFont(font);
+    xpText.setFillColor(Color::White);
+    xpText.setPosition(Vector2f(240, 48-5)); // Position to the right of the xp bar icon
+
+    // Create shadow texts
+    Text healthShadow = healthText;
+    healthShadow.setFillColor(Color::Black);
+    healthShadow.setPosition(healthText.getPosition() + Vector2f(1, 1)); // Offset shadow
+
+    Text armorShadow = armorText;
+    armorShadow.setFillColor(Color::Black);
+    armorShadow.setPosition(armorText.getPosition() + Vector2f(1, 1)); // Offset shadow
+
+    Text xpShadow = xpText;
+    xpShadow.setFillColor(Color::Black);
+    xpShadow.setPosition(xpText.getPosition() + Vector2f(1, 1)); // Offset shadow
+
+    // Draw shadows first
+    window.draw(healthShadow);
+    window.draw(armorShadow);
+    window.draw(xpShadow);
+
+    // Draw original texts on top
+    window.draw(healthText);
+    window.draw(armorText);
+    window.draw(xpText);
+}
+
 void draw(RenderWindow& window) {
     // deseneaza fiecare tile din vectorul mapTiles
     for (Tile& tile : mapTiles) {
@@ -892,6 +953,7 @@ void draw(RenderWindow& window) {
 
     // those needs 2 be on top
     drawBars(window); // desenare bare de viata, armura si xp
+    drawText(window); // desenare text cu nivelul si banii
 }
 
 // -------------------------------------------------------------------- main --------------------------------------------------------------------
