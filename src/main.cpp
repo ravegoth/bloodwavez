@@ -6,11 +6,11 @@
 #include <string>             // pentru manipularea stringurilor
 #include <vector>             // pentru utilizarea containerului vector
 #include <memory>             // pentru pointeri inteligenti si managementul memoriei
+#include <map>                // pentru utilizarea containerului map
 #include <algorithm>          // pentru algoritmi standard (sort, etc.)
 #include <filesystem>         // pentru manipularea fisierelor si directoarelor
 #include <windows.h>          // pentru api-ul windows (winmain, ascundere fereastra cmd)
 #include <tlhelp32.h>         // pentru operatii pe procese si thread-uri in windows
-
 
 // ------ alte fisiere
 #include "Inventory.hpp"
@@ -25,16 +25,19 @@
 #include <variant>
 #include <type_traits>
 
-// folosim spatiile de nume
+// -------------------------------------------------------------------- namespace --------------------------------------------------------------------
 using namespace std;
 using namespace sf;
 
 // -------------------------------------------------------------------- constante --------------------------------------------------------------------
-const unsigned int FPS_LIMIT = 60;           // limita de cadre pe secunda
+const int FPS_LIMIT = 60;           // limita de cadre pe secunda
+const int SPEED_LIMIT = 4;          // 3px/sec
+const bool RELEASE = false;         // flag pentru release (true = release, false = debug)
+unsigned int frameCount = 0;
 
 // -------------------------------------------------------------------- functii utilitare --------------------------------------------------------------------
+// genereaza un numar aleatoriu in intervalul [a, b)
 float rand_uniform(float a, float b) {
-    // genereaza un numar aleatoriu in intervalul [a, b)
     return rand() / (RAND_MAX + 1.0) * (b - a) + a;
 }
 
@@ -44,19 +47,55 @@ float distance(Vector2<T> a, Vector2<T> b) {
     return sqrt(pow(a.x - b.x, 2) + pow(a.y - b.y, 2));
 }
 
-// -------------------------------------------------------------------- variabile globale --------------------------------------------------------------------
+// -------------------------------------------------------------------- variabile globale legate de joc --------------------------------------------------------------------
 bool mouseDown = false;           // flag: true daca mouse-ul este apasat
 bool leftClick = false;           // flag: true daca butonul stang a fost apasat
 bool rightClick = false;          // flag: true daca butonul drept a fost apasat
 float mouseX = 0, mouseY = 0;       // coordonatele curente ale mouse-ului
 bool keysPressed[256] = { false }; // starea tastelor
 
-unsigned playerX = 400, playerY = 300; // pozitia initiala a jucatorului
-unsigned playerSpeed = 5;              // viteza de miscare a jucatorului
+int playerX = 0;
+int playerY = 300; // pozitia initiala a jucatorului
+bool notMoving = true; // flag pentru miscarea jucatorului
+int playerSpeed = 1;              // viteza de miscare a jucatorului
+
 Inventory playerInventory;
+string playerHolding = "weapon_basic_sword"; // arma pe care o tine jucatorul init
+Vector2f swordHitbox1(0, 0); // hitbox-ul armei (sword1)
+Vector2f swordHitbox2(0, 0); // hitbox-ul armei (sword2ss)
 int pickupRadius = 40; // raza de pickup pentru obiecte
 
-// -------------------------------------------------------------------- clasa Object --------------------------------------------------------------------
+float playerVx = 0; // velocitatea pe axa x a jucatorului
+float playerVy = 0; // velocitatea pe axa y a jucatoruluis
+int moveAnimationCounter = 0; // contor pentru animatia de miscare a jucatorului
+
+bool dashing = false; // flag pentru dash
+bool canDash = true; // flag pentru cooldown-ul dash-ului
+float dashSpeed = 8; // viteza de dash
+float dashDuration = 30; // durata dash-ului in cadre
+int dashCooldown = 60*3; // cooldown-ul dash-ului in frameuri
+
+int balance = 0; // numarul de $$$
+int xp = 0; // xp-ul jucatorului
+int level = 1; // starting level
+int levelXP = 100; // xp-ul necesar pentru a urca la nivelul urmator
+
+int playerHealth = 100; // viata jucatorului
+int playerMaxHealth = 100; // viata maxima a jucatorului
+int playerArmor = 0; // armura jucatorului
+int playerMaxArmor = 100; // armura maxima a jucatorului
+int playerDamageMultiplier = 1; // muliplicatorul de damage al jucatorului care va fi inmultit cu damage-ul armei
+
+
+// ---------------------------------------------------- functii folosite de obiecte (forward decl) -----------------------------------------------------------
+
+void spawnCoinAt(float x, float y);
+void spawnXPAt(float x, float y);
+void playerTakeDamage(int amount);
+
+// -------------------------------------------------------------------- obiecte --------------------------------------------------------------------
+
+// obiect abstract (nu exista scop inca)
 class Object {
 public:
     float x, y;       // coordonatele obiectului
@@ -74,6 +113,7 @@ public:
     }
 };
 
+// pt fi picked up
 struct ItemObject {
     Object obj;
     std::shared_ptr<Item> item;
@@ -82,51 +122,1008 @@ struct ItemObject {
     ItemObject(Object obj, std::shared_ptr<Item> item) : obj(obj), item(item) {}
 };
 
-vector<ItemObject> worldItems;
+class SoundManager {
+private:
+    map<string, SoundBuffer> soundBuffers; // mapa pentru a stoca buffer-ele de sunet incarcate
+    map<string, std::shared_ptr<Sound>> sounds; // mapa pentru a stoca pointerii la sunete
 
-class Tile {
+    // constructor privat pentru a preveni instantierea directa
+    SoundManager() {}
+
 public:
-    float x, y;       // coordonatele tile-ului
-    float width, height; // dimensiunile tile-ului
-    Color color;      // culoarea tile-ului
-    // constructor
-    Tile(float x, float y, float width, float height, Color color) : x(x), y(y), width(width), height(height), color(color) {}
-    
-    // metoda pentru desenarea tile-ului in fereastra
-    void draw(RenderWindow& window) {
-        RectangleShape rect(Vector2f(width, height)); // creeaza un dreptunghi cu dimensiunile specificate
-        rect.setFillColor(color);                      // seteaza culoarea
-        rect.setPosition(Vector2f(x, y));              // seteaza pozitia (folosim vector2f)
-        // white stroke
-        rect.setOutlineColor(Color::White);            // seteaza culoarea conturului
-        rect.setOutlineThickness(1);                   // seteaza grosimea conturului
-        rect.setPosition(Vector2f(x, y));              // seteaza pozitia (folosim vector2f)
-        window.draw(rect);                             // deseneaza dreptunghiul
+    // singleton pattern
+    SoundManager(const SoundManager&) = delete;
+    SoundManager& operator=(const SoundManager&) = delete;
+
+    static SoundManager& getInstance() {
+        static SoundManager instance; // instanta unica
+        return instance;
+    }
+
+    // metoda pentru a incarca un sunet
+    void loadSound(const string& name, const string& filename) {
+        string full_filename = "./res/" + filename + ".wav"; // adauga calea catre fisier
+        if (soundBuffers.find(name) == soundBuffers.end()) {
+            SoundBuffer buffer;
+            if (!buffer.loadFromFile(full_filename)) { // incarca fisierul
+                cout << "Failed to load sound: " << filename << endl;
+                return;
+            }
+            soundBuffers[name] = buffer; // adauga buffer-ul in mapa
+            sounds[name] = std::make_shared<sf::Sound>(soundBuffers[name]); // asociaza buffer-ul cu un pointer la sunet
+            cout << "Loaded sound: " << filename << endl;
+
+            // do not play sound when loaded
+            sounds[name]->setVolume(0); // seteaza volumul la 0 pentru a nu reda sunetul la incarcare
+        }
+    }
+
+    // metoda pentru a reda un sunet
+    void playSound(const string& name, int volume = 100) {
+        if (sounds.find(name) != sounds.end()) {
+            // seteaza volumul la 100% (sau orice altceva vrei)
+            sounds[name]->setVolume(volume); // seteaza volumul
+            sounds[name]->play();
+        } else {
+            cout << "Sound not found for playing: " << name << endl;
+
+            cout << "Trying to load sound: " << name << endl;
+
+            loadSound(name, name); // incarca sunetul daca nu este gasit
+        }
+    }
+
+    // metoda pentru a opri un sunet
+    void stopSound(const string& name) {
+        if (sounds.find(name) != sounds.end()) {
+            sounds[name]->stop();
+        } else {
+            cout << "Sound not found for stopping: " << name << endl;
+        }
+    }
+
+    // metoda pentru a verifica daca un sunet este incarcat
+    bool isLoaded(const string& name) {
+        return soundBuffers.find(name) != soundBuffers.end();
+    }
+
+    // destructor
+    ~SoundManager() {
+        sounds.clear();
+        soundBuffers.clear();
     }
 };
 
+// TODO
+// class bgmManager {
+// private:
+//     Sound bgm; // obiectul pentru sunetul de fundal
+//     bool playing = false; // flag pentru a verifica daca muzica este redat
+//     map<string, SoundBuffer> soundBuffers; // mapa pentru a stoca buffer-ele de sunet incarcate
+//     string currentTrack; // numele melodiei curente
+//     // constructor privat pentru a preveni instantierea directa
+//     bgmManager() {
+//         SoundBuffer buffer;
+//         if (!buffer.loadFromFile("./res/default_bgm.wav")) { // Provide a default sound file
+//             cout << "Failed to load default BGM" << endl;
+//         } else {
+//             bgm.setBuffer(buffer); // Initialize bgm with the default buffer
+//             soundBuffers["default_bgm"] = buffer; // Store the buffer for reuse
+//         }
+//     }
+
+// public:
+//     // singleton pattern
+//     bgmManager(const bgmManager&) = delete;
+//     bgmManager& operator=(const bgmManager&) = delete;
+
+//     static bgmManager& getInstance() {
+//         static bgmManager instance; // instanta unica
+//         return instance;
+//     }
+
+//     // metoda pentru a incarca un sunet
+//     void loadBGM(const string& name, const string& filename) {
+//         string full_filename = "./res/" + filename + ".wav"; // adauga calea catre fisier
+//         if (soundBuffers.find(name) == soundBuffers.end()) {
+//             SoundBuffer buffer;
+//             if (!buffer.loadFromFile(full_filename)) { // incarca fisierul
+//                 cout << "Failed to load BGM: " << filename << endl;
+//                 return;
+//             }
+//             soundBuffers[name] = buffer; // adauga buffer-ul in mapa
+//             cout << "Loaded BGM: " << filename << endl;
+//         }
+//     }
+
+//     // metoda pentru a reda un sunet
+//     void playBGM(const string& name, int volume = 50) {
+//         if (currentTrack == name && playing) return; // daca melodia curenta este deja redata, nu face nimic
+
+//         if (soundBuffers.find(name) != soundBuffers.end()) {
+//             bgm.setBuffer(soundBuffers[name]); // seteaza buffer-ul pentru sunet
+//             bgm.setLoop(true); // seteaza redarea in bucla
+//             bgm.setVolume(volume); // seteaza volumul
+//             bgm.play(); // reda melodia
+//             currentTrack = name; // actualizeaza melodia curenta
+//             playing = true; // seteaza flag-ul de redare
+//         } else {
+//             cout << "BGM not found: " << name << endl;
+//         }
+//     }
+
+//     // metoda pentru a opri muzica
+//     void stopBGM() {
+//         bgm.stop();
+//         playing = false;
+//         currentTrack = "";
+//     }
+
+//     // destructor
+//     ~bgmManager() {
+//         stopBGM();
+//         soundBuffers.clear();
+//     }
+// };
+
+class TextureManager {
+private:
+    map<std::string, sf::Texture> textures; // mapa pentru a stoca texturile incarcate
+    // contructor privat pentru a preveni instantierea directa 
+    // singleton pattern
+    TextureManager() {}
+
+public:
+    // bla bla bla singleton stuff
+    TextureManager(const TextureManager&) = delete;
+    TextureManager& operator=(const TextureManager&) = delete;
+
+    // instancea singletons
+    static TextureManager& getInstance() {
+        static TextureManager instance; // Instanta unica
+        return instance;
+    }
+
+    Texture& find(const std::string& name) {
+        std::string filename = "./res/" + name + ".png";
+        // verifica daca textura este deja incarcata
+        if (textures.find(filename) == textures.end()) {
+            Texture texture;
+            if (!texture.loadFromFile(filename)) {
+                cout << "Failed to load texture: " << filename << endl; 
+            }
+            textures[filename] = texture; // adauga textura in mapa
+        }
+        return textures[filename]; // returneaza textura incarcata
+    }
+
+    void justLoad(const std::string& name) {
+        std::string filename = "./res/" + name + ".png";
+        // verifica daca textura este deja incarcata
+        if (textures.find(filename) == textures.end()) {
+            Texture texture;
+            if (!texture.loadFromFile(filename)) {
+                cout << "Failed to load texture: " << filename << endl; 
+            }
+            textures[filename] = texture; // adauga textura in mapa
+            cout << "Loaded texture: " << filename << endl; // afiseaza mesaj de incarcare
+        }
+    }
+
+    void clear() {
+        textures.clear(); // sterge toate textele incarcate
+    }
+    // destructor
+    ~TextureManager() {
+        clear(); // sterge toate textele incarcate
+    }
+    // metoda pentru a verifica daca textura este incarcata
+    bool isLoaded(const std::string& name) {
+        std::string filename = "./res/" + name + ".png";
+        return textures.find(filename) != textures.end(); // verifica daca textura este incarcata
+    }
+};
+
+class Tile {
+private:
+    float x, y;       // coordonatele tile-ului
+    float width, height; // dimensiunile tile-ului
+    Color color;      // culoarea tile-ului
+    string type;
+
+public:
+    // constructor
+    // default tile is dirt bcs idk
+    Tile(float x, float y, float width, float height, Color color, string type = "dirt") : x(x), y(y), width(width), height(height), color(color), type(type) {}
+    
+    // metoda pentru desenarea tile-ului in fereastra
+    void draw(RenderWindow& window) {
+        // RectangleShape rect(Vector2f(width, height)); // creeaza un dreptunghi cu dimensiunile specificate
+        // rect.setFillColor(color);                      // seteaza culoarea
+        // rect.setPosition(Vector2f(x, y));              // seteaza pozitia (folosim vector2f)
+        // // white stroke
+        // rect.setOutlineColor(Color::White);            // seteaza culoarea conturului
+        // rect.setOutlineThickness(1);                   // seteaza grosimea conturului
+        // rect.setPosition(Vector2f(x, y));              // seteaza pozitia (folosim vector2f)
+        // window.draw(rect);                             // deseneaza dreptunghiul
+
+        // if type == "dirt", draw ./res/dirt.png
+        if (type == "dirt") {
+            Texture& texture = TextureManager::getInstance().find("dirt");
+            Sprite sprite(texture);
+            sprite.setPosition(Vector2f(x, y)); // seteaza pozitia (folosim vector2f)
+            sprite.setScale(Vector2f(40.0f / texture.getSize().x, 40.0f / texture.getSize().y));
+            window.draw(sprite); // deseneaza sprite-ul
+        }
+
+        // if type == "stone", draw ./res/stone.png
+        if (type == "stone") {
+            Texture& texture = TextureManager::getInstance().find("stone");
+            Sprite sprite(texture);
+            sprite.setPosition(Vector2f(x, y)); // seteaza pozitia (folosim vector2f)
+            sprite.setScale(Vector2f(40.0f / texture.getSize().x, 40.0f / texture.getSize().y));
+            window.draw(sprite); // deseneaza sprite-ul
+        }
+
+        // if type == "grass1", draw ./res/grass1.png
+        if (type == "grass1") {
+            Texture& texture = TextureManager::getInstance().find("grass1");
+            Sprite sprite(texture);
+            sprite.setPosition(Vector2f(x, y)); // seteaza pozitia (folosim vector2f)
+            sprite.setScale(Vector2f(40.0f / texture.getSize().x, 40.0f / texture.getSize().y));
+            window.draw(sprite); // deseneaza sprite-ul
+        }
+
+        // if type == "grass2", draw ./res/grass2.png
+        if (type == "grass2") {
+            Texture& texture = TextureManager::getInstance().find("grass2");
+            Sprite sprite(texture);
+            sprite.setPosition(Vector2f(x, y)); // seteaza pozitia (folosim vector2f)
+            sprite.setScale(Vector2f(40.0f / texture.getSize().x, 40.0f / texture.getSize().y));
+            window.draw(sprite); // deseneaza sprite-ul
+        }
+
+        // if type == "grass3", draw ./res/grass3.png
+        if (type == "grass3") {
+            Texture& texture = TextureManager::getInstance().find("grass3");
+            Sprite sprite(texture);
+            sprite.setPosition(Vector2f(x, y)); // seteaza pozitia (folosim vector2f)
+            sprite.setScale(Vector2f(40.0f / texture.getSize().x, 40.0f / texture.getSize().y));
+            window.draw(sprite); // deseneaza sprite-ul
+        }
+    }
+
+    // setters and getters
+    float getX() const { return x; }                // getter pentru x
+    float getY() const { return y; }                // getter pentru y
+    float getWidth() const { return width; }        // getter pentru width
+    float getHeight() const { return height; }      // getter pentru height
+    Color getColor() const { return color; }        // getter pentru culoare
+    string getType() const { return type; }        // getter pentru tip
+    void setX(float x) { this->x = x; }             // setter pentru x
+    void setY(float y) { this->y = y; }             // setter pentru y
+    void setWidth(float width) { this->width = width; } // setter pentru width
+    void setHeight(float height) { this->height = height; } // setter pentru height
+    void setColor(Color color) { this->color = color; } // setter pentru culoare
+    void setType(string type) { this->type = type; } // setter pentru tip
+};
+
+
+// clasa asta sigur va fi mostenita
+class Enemy {
+protected:
+    int health; // viata inamicului
+    int maxHealth; // viata maxima a inamicului
+    int damage; // damage-ul inamicului
+    bool isMelee;
+    float x, y;
+    float vx, vy; // viteza pe axa x si y
+    int animation; // animatia inamicului (de la 1 la 100)
+    bool toBeDeleted = false; // DEAD
+    bool isAttacking = false; // flag pentru atac (va schima animatia, si daca e aproape de player si melee va da damage)
+    bool canAttack = true; // flag pentru cooldown-ul atacului
+    int attackCooldown = 60; // current cooldown in frameuri
+    int attackCooldownStart = 60; // attackCooldown dupa atac = attackCooldownStart
+    int xpOnDrop = 0; // xp-ul pe care il drop-eaza inamicul
+    int coinsOnDrop = 0; // banii pe care ii drop-eaza inamicul
+    float speed = 0.5f; // viteza de miscare a inamicului
+    float maxSpeed = 2.5f; // viteza maxima a inamicului
+    float enemyHeight = 50; // dimensiunile inamicului (pentru hitbox)
+    float enemyWidth = 30; // dimensiunile inamicului (pentru hitbox)
+    float attackRadius = 40; // raza de atac a inamicului (pentru hitbox)
+    int isAttackingAnimation = 0; // animatia de atac (30 frameuri)
+public:
+// Constructor
+    Enemy(float x, float y, int health, int damage, bool isMelee) {
+        this->x = x; // seteaza pozitia pe axa x
+        this->y = y; // seteaza pozitia pe axa y
+        this->health = health; // seteaza viata inamicului
+        this->damage = damage; // seteaza damage-ul inamicului
+        this->isMelee = isMelee; // seteaza daca inamicul este melee sau ranged
+        vx = 0; // initializare viteza pe axa x
+        vy = 0; // initializare viteza pe axa y
+        animation = 0; // initializare animatie
+        toBeDeleted = false; // initializare DEAD
+        isAttacking = false; // initializare atac
+        canAttack = true; // initializare cooldown atac
+        attackCooldown = 60; // initializare cooldown atac
+        attackCooldownStart = 60; // initializare cooldown atac
+        xpOnDrop = 0; // initializare xp drop
+        coinsOnDrop = 0; // initializare bani drop
+        speed = 0.5f; // initializare viteza de miscare
+        maxSpeed = 2.5f; // initializare viteza maxima
+        enemyHeight = 50; // initializare inaltime inamic
+        enemyWidth = 30; // initializare latime inamic
+        attackRadius = 40; // initializare raza de atac
+        isAttackingAnimation = 0; // initializare animatie de atac
+    }
+
+    // Getters
+    float getX() const { return x; }
+    float getY() const { return y; }
+    int getHealth() const { return health; }
+    int getMaxHealth() const { return maxHealth; }
+    int getDamage() const { return damage; }
+    bool isMeleeEnemy() const { return isMelee; }
+    bool isToBeDeleted() const { return toBeDeleted; }
+    bool getIsAttacking() const { return isAttacking; }
+
+    // Setters
+    void setX(float x) { this->x = x; }
+    void setY(float y) { this->y = y; }
+    void setHealth(int health) { this->health = health; }
+    void setToBeDeleted(bool deleted) { this->toBeDeleted = deleted; }
+
+    // Methods
+    void takeDamage(int amount) {
+        if (toBeDeleted) return; // Already dead
+
+        health -= amount;
+        // hit_enemy sound effect:
+        SoundManager::getInstance().playSound("hit_enemy"); // Play hit sound
+
+        if (health <= 0) {
+            health = 0; // Ensure health doesn't go negative
+            toBeDeleted = true;
+
+            // Drop XP and coins
+            for (int i = 0; i < coinsOnDrop; ++i) {
+                // Spawn coin at enemy's position
+                spawnCoinAt(x, y); // Function to spawn coin at enemy's position
+            }
+            for (int i = 0; i < xpOnDrop; ++i) {
+                // Spawn XP item at enemy's position
+                spawnXPAt(x, y); // Function to spawn XP item at enemy's position
+            }
+            
+            // death sound effect:
+            SoundManager::getInstance().playSound("dead_enemy"); // Play death sound
+        }
+    }
+
+    virtual void update(RenderWindow& window) {
+        if (toBeDeleted) return;
+    }
+
+    virtual void draw(RenderWindow& window) {   };
+};
+
+class EnemyGoblin : public Enemy {
+public:
+    EnemyGoblin(float x, float y, int health, int damage, bool isMelee)
+        : Enemy(x, y, health, damage, isMelee) {
+        xpOnDrop = 10 + rand() % 10; // XP dropped when killed
+        coinsOnDrop = 7; // Coins dropped when killed
+        damage = 5; // Damage dealt to player
+        maxHealth = 20 + rand() % 10; // Health of the goblin
+        health = maxHealth; // Set current health to max health
+        attackCooldown = 30; // Cooldown for attack in frames
+        attackCooldownStart = 30; // Cooldown for attack in frames
+        isMelee = true; // Goblin is a melee enemy
+        vx = 0; // Initial velocity on x-axis
+        vy = 0; // Initial velocity on y-axis
+        animation = 0; // Initial animation frame
+        toBeDeleted = false; // Goblin is not dead
+        isAttacking = false; // Goblin is not attacking
+        isAttackingAnimation = 0; // Keep that sprite for 30 frames
+        canAttack = true; // Goblin can attack
+        speed = 0.5f;
+        maxSpeed = 2.5f; // Maximum speed of the goblin
+        this->x = x; // Set goblin's x position
+        this->y = y; // Set goblin's y position
+        this->vx = 0; // Set goblin's x velocity
+        this->vy = 0; // Set goblin's y velocity
+        this->enemyHeight = 50; // Height of the goblin
+        this->enemyWidth = 30; // Width of the goblin
+        attackRadius = 40;
+    }
+
+    void draw(RenderWindow& window) override {
+        // textures:
+        // walk 1 (animation % 50 < 25) = enemy_goblin_walk1.png
+        // walk 2 (animation % 50 >= 25) = enemy_goblin_walk2.png
+        // attack (when isAttacking) = enemy_goblin_attack.png
+        // if he's in the right of the player:
+        // walk 1 mirrored (animation % 50 < 25) = enemy_goblin_walk1_mirror.png
+        // walk 2 mirrored (animation % 50 >= 25) = enemy_goblin_walk2_mirror.png
+        // attack mirrored (when isAttacking) = enemy_goblin_attack_mirror.png
+        Texture& textureWalk1 = TextureManager::getInstance().find("enemy_goblin_walk1");
+        Texture& textureWalk2 = TextureManager::getInstance().find("enemy_goblin_walk2");
+        Texture& textureAttack = TextureManager::getInstance().find("enemy_goblin_attack");
+        Texture& textureWalk1Mirror = TextureManager::getInstance().find("enemy_goblin_walk1_mirror");
+        Texture& textureWalk2Mirror = TextureManager::getInstance().find("enemy_goblin_walk2_mirror");
+        Texture& textureAttackMirror = TextureManager::getInstance().find("enemy_goblin_attack_mirror");
+
+        Sprite sprite(textureWalk1); // Initialize with a valid texture
+
+        // draw (centered) at x, y
+        sprite.setPosition(Vector2f(getX() - textureWalk1.getSize().x / 2, getY() - textureWalk1.getSize().y / 2)); // center the sprite
+        // auto scale the sprite to 30x50 px
+        sprite.setScale(Vector2f(enemyWidth / textureWalk1.getSize().x, enemyHeight / textureWalk1.getSize().y)); // scale the sprite
+        
+        // draw
+        if (isAttackingAnimation > 0) {
+            // draw attack animation
+            if (getX() < 200) {
+                sprite.setTexture(textureAttack); // set texture to attack
+            } else {
+                sprite.setTexture(textureAttackMirror); // set texture to attack mirrored
+            }
+        } else {
+            // draw walk animation
+            if (animation % 50 < 25) {
+                if (getX() < 200) {
+                    sprite.setTexture(textureWalk1); // set texture to walk1
+                } else {
+                    sprite.setTexture(textureWalk1Mirror); // set texture to walk1 mirrored
+                }
+            } else {
+                if (getX() < 200) {
+                    sprite.setTexture(textureWalk2); // set texture to walk2
+                } else {
+                    sprite.setTexture(textureWalk2Mirror); // set texture to walk2 mirrored
+                }
+            }
+        }
+
+        // set the scale to 30x50 px
+        sprite.setScale(Vector2f(30.0f / textureWalk1.getSize().x, 50.0f / textureWalk1.getSize().y)); // scale the sprite
+        // set the position to x, y
+        sprite.setPosition(Vector2f(getX() - 30.0f / 2, getY() - 50.0f / 2)); // center the sprite 
+        // draw the sprite  
+        window.draw(sprite); // draw the sprite
+        // update animation
+        animation = (animation % 100) + 1; // update animation
+    }
+
+    // update
+    void update(RenderWindow& window) override {
+        if (toBeDeleted) return; // Already dead
+
+        // update animation
+        animation = (animation % 100) + 1; // update animation
+        if (isAttackingAnimation > 0) isAttackingAnimation--; // update attack animation
+
+        // update cooldown
+        if (attackCooldown > 0) {
+            attackCooldown--;
+        } else {
+            canAttack = true;
+        }
+
+        // move towards player
+        if (getX() < 200) {
+            vx += speed; // move right
+        } else {
+            vx += -speed; // move left
+        }
+        if (getY() < playerY) {
+            vy += speed; // move down
+        } else {
+            vy += -speed; // move up
+        }
+
+        // limit
+        if (vx > maxSpeed) vx = maxSpeed; // limit speed
+        if (vx < -maxSpeed) vx = -maxSpeed; // limit speed
+        if (vy > maxSpeed) vy = maxSpeed; // limit speed
+        if (vy < -maxSpeed) vy = -maxSpeed; // limit speed
+
+        // check distance to player
+        float distToPlayer = distance(Vector2f(getX(), getY()), Vector2f(200, playerY));
+        float angleToPlayer = atan2(playerY - getY(), 200 - getX()); // calculate angle to player
+        Angle angle(radians(angleToPlayer)); // convert to Angle object
+
+        // // debug: desenaza o linie de la inamic la player
+        // sf::Vertex line[] = {
+        //     {{getX(), getY()}, sf::Color::Red},
+        //     {{200.f, static_cast<float>(playerY)}, sf::Color::Red}
+        // };
+
+        // // debug: draw 30x50 hitbox
+        // sf::Vertex hitbox[] = {
+        //     {{getX() - 30.0f / 2, getY() - 50.0f / 2}, sf::Color::Red},
+        //     {{getX() + 30.0f / 2, getY() - 50.0f / 2}, sf::Color::Red},
+        //     {{getX() + 30.0f / 2, getY() + 50.0f / 2}, sf::Color::Red},
+        //     {{getX() - 30.0f / 2, getY() + 50.0f / 2}, sf::Color::Red}
+        // };
+        // // draw hitbox
+        // window.draw(hitbox, 4, sf::PrimitiveType::LineStrip); // draw the hitbox
+        
+        // line[0].color = sf::Color::Red; // set color to red
+        // line[1].color = sf::Color::Red; // set color to red
+        // window.draw(line, 2, sf::PrimitiveType::Lines); // draw the line
+
+        // if swordhitbox1 or swordhitbox2 is inside the enemy hitbox, take damage
+        // and knockback (velocity 7 * cos/sin) in the opposite direction of the player
+        // not using distance, but using hitbox collision
+        if (swordHitbox1.x > getX() - enemyWidth / 2 && swordHitbox1.x < getX() + enemyWidth / 2 &&
+            swordHitbox1.y > getY() - enemyHeight / 2 && swordHitbox1.y < getY() + enemyHeight / 2) {
+            takeDamage(playerDamageMultiplier * damage); // take damage from player
+            vx += -7 * cos(angleToPlayer); // knockback in the opposite direction of the player
+            vy += -7 * sin(angleToPlayer); // knockback in the opposite direction of the player
+        }
+        if (swordHitbox2.x > getX() - enemyWidth / 2 && swordHitbox2.x < getX() + enemyWidth / 2 &&
+            swordHitbox2.y > getY() - enemyHeight / 2 && swordHitbox2.y < getY() + enemyHeight / 2) {
+            takeDamage(playerDamageMultiplier * damage); // take damage from player
+            vx += -7 * cos(angleToPlayer); // knockback in the opposite direction of the player
+            vy += -7 * sin(angleToPlayer); // knockback in the opposite direction of the player
+        }
+
+        if (distToPlayer < attackRadius && canAttack) { // if close enough to attack
+            isAttacking = true;
+            canAttack = false;
+            attackCooldown = attackCooldownStart; // reset cooldown
+            if (isMelee) {
+                playerTakeDamage(damage); // deal damage to player
+                // knockback player
+                playerVx += -1.5 * cos(angleToPlayer); // knockback in the opposite direction of the player
+                playerVy += -1.5 * sin(angleToPlayer); // knockback in the opposite direction of the player
+                isAttackingAnimation = 30; // set attack animation
+                SoundManager::getInstance().playSound("took_damage"); // Play hit sound for player
+            }
+        } else {
+            isAttacking = false;
+        }
+
+        // apply velocity to position
+        x += vx * 0.8f; // apply velocity to x position
+        y += vy * 0.8f; // apply velocity to y position
+
+        x += playerVx; // apply player velocity to x position
+        // y += playerVy; // apply player velocity to y position
+    }
+};
+
+class EnemyBaphomet : public Enemy {
+public:
+    EnemyBaphomet(float x, float y)
+        : Enemy(x, y, /*health*/ 0, /*damage*/ 0, /*isMelee*/ true) {
+        // Baphomet is twice as powerful and a bit faster than goblin
+        xpOnDrop         = 20 + rand() % 20;       // 20-39 XP
+        coinsOnDrop      = 14;                     // twice goblin
+        damage           = 12;                     // twice goblin's damage
+        maxHealth        = 60 + rand() % 20;       // 40-59 health
+        health           = maxHealth;
+        attackCooldownStart = attackCooldown = 20; // faster attacks
+        isMelee          = true;
+        speed            = 0.8f;                   // increased speed
+        maxSpeed         = 4.0f;                   // higher top speed
+        animation        = rand() % 100; // random animation start
+        toBeDeleted      = false;                 // not dead
+        canAttack        = true;
+        isAttacking      = false;
+        isAttackingAnimation = 0;
+        enemyWidth       = 50;                     // larger hitbox
+        enemyHeight      = 70;
+        attackRadius     = 60;                     // bigger reach
+        this->x = x;
+        this->y = y;
+        vx = vy = 0;
+    }
+
+    void draw(RenderWindow& window) override {
+        // Load or retrieve Baphomet textures
+        Texture& texW1   = TextureManager::getInstance().find("enemy_baphomet_walk1");
+        Texture& texW2   = TextureManager::getInstance().find("enemy_baphomet_walk2");
+        Texture& texAtk  = TextureManager::getInstance().find("enemy_baphomet_attack");
+        Texture& texW1M  = TextureManager::getInstance().find("enemy_baphomet_walk1_mirror");
+        Texture& texW2M  = TextureManager::getInstance().find("enemy_baphomet_walk2_mirror");
+        Texture& texAtkM = TextureManager::getInstance().find("enemy_baphomet_attack_mirror");
+
+        Sprite sprite(texW1);
+        sprite.setOrigin(Vector2f(texW1.getSize().x / 2.f, texW1.getSize().y / 2.f));
+        sprite.setScale(sf::Vector2f(enemyWidth / (float)texW1.getSize().x,
+                                    enemyHeight / (float)texW1.getSize().y));
+        
+        // choose texture
+        if (isAttackingAnimation > 0) {
+            sprite.setTexture(getX() < 200 ? texAtk : texAtkM);
+        } else if (animation % 50 < 25) {
+            sprite.setTexture(getX() < 200 ? texW1 : texW1M);
+        } else {
+            sprite.setTexture(getX() < 200 ? texW2 : texW2M);
+        }
+        
+        sprite.setPosition(sf::Vector2f(getX(), getY()));
+        window.draw(sprite);
+
+        // advance animation
+        animation = (animation % 100) + 1;
+        if (isAttackingAnimation > 0) --isAttackingAnimation;
+    }
+
+    void update(RenderWindow& window) override {
+        if (toBeDeleted) return;
+
+        // cooldowns
+        if (attackCooldown > 0) --attackCooldown;
+        else canAttack = true;
+
+        // movement: home in
+        float dx = 200 - getX();
+        float dy = playerY - getY();
+        float dist = std::sqrt(dx*dx + dy*dy);
+        if (getX() < 200) vx += speed; else vx -= speed;
+        if (getY() < playerY) vy += speed; else vy -= speed;
+
+        // chaotic vertical jitter when animation hits a specific frame
+        if (animation == 2) {
+            vy += rand_uniform(-3.f, 3.f);
+        }
+
+        // clamp
+        vx = std::clamp(vx, -maxSpeed, maxSpeed);
+        vy = std::clamp(vy, -maxSpeed, maxSpeed);
+
+        // attack logic
+        if (dist < attackRadius && canAttack) {
+            isAttacking = true;
+            canAttack = false;
+            attackCooldown = attackCooldownStart;
+            isAttackingAnimation = 30;
+            playerTakeDamage(damage); // deal damage to player
+            // knockback player
+            playerVx += -3 * cos(atan2(dy, dx)); // knockback in the opposite direction of the player
+            playerVy += -3 * sin(atan2(dy, dx)); // knockback in the opposite direction of the player
+            SoundManager::getInstance().playSound("took_damage");
+        } else {
+            isAttacking = false;
+        }
+
+        // take damage logic from sword
+        Angle towardsPlayerAngle = sf::radians(atan2(dy, dx)); // angle towards player
+        // check if sword hitboxes are inside enemy hitbox
+        if (swordHitbox1.x > getX() - enemyWidth / 2 && swordHitbox1.x < getX() + enemyWidth / 2 &&
+            swordHitbox1.y > getY() - enemyHeight / 2 && swordHitbox1.y < getY() + enemyHeight / 2) {
+            takeDamage(playerDamageMultiplier * 10); // take damage from player
+            vx += -7 * cos(towardsPlayerAngle.asRadians()); // knockback in the opposite direction of the player
+            vy += -7 * sin(towardsPlayerAngle.asRadians()); // knockback in the opposite direction of the player
+        }
+        if (swordHitbox2.x > getX() - enemyWidth / 2 && swordHitbox2.x < getX() + enemyWidth / 2 &&
+            swordHitbox2.y > getY() - enemyHeight / 2 && swordHitbox2.y < getY() + enemyHeight / 2) {
+            takeDamage(playerDamageMultiplier * 10); // take damage from player
+            vx += -7 * cos(towardsPlayerAngle.asRadians()); // knockback in the opposite direction of the player
+            vy += -7 * sin(towardsPlayerAngle.asRadians()); // knockback in the opposite direction of the player
+        }
+
+        // apply movement
+        x += vx * 0.8f + playerVx;
+        y += vy * 0.8f;
+    }
+};
+
+
+// clasa de bani
+class Coin {
+private:
+    float x, y;       // coordonatele monedei
+    int animation;    // animatia monedei (de la 1 la 100)
+    float vx, vy; // viteza pe axa x si y (nu e folosita inca)
+    bool toBeDeleted = false; // flag pentru autodistrugere
+
+public:
+    // constructor
+    Coin(float x, float y) : x(x), y(y) {
+        animation = rand() % 100 + 1; // genereaza o animatie aleatoare intre 1 si 100
+        vx = rand_uniform(-2, 2); // genereaza o viteza aleatoare pe axa x
+        vy = rand_uniform(-2, 2); // genereaza o viteza aleatoare pe axa y
+        toBeDeleted = false; // seteaza flag-ul de autodistrugere la false
+    }
+
+    // getters
+    float getX() const { return x; }
+    float getY() const { return y; }
+    int getAnimation() const { return animation; }
+
+    // setters
+    void setX(float x) { this->x = x; }
+    void setY(float y) { this->y = y; }
+    void setAnimation(int animation) { this->animation = animation; }
+
+    // update
+    void update() {
+        // actualizeaza pozitia monedei in functie de viteza
+        x += vx;
+        y += vy;
+
+        // verifica daca moneda a iesit din ecran
+        if (x < 0 || x > 800 || y < 0 || y > 600) {
+            vx = -vx; // inverseaza viteza pe axa x
+            vy = -vy; // inverseaza viteza pe axa y
+        }
+
+        if (x < 0) x = 0, vx += 1;
+        if (x > 800) x = 800, vx -= 1;
+        if (y < 0) y = 0, vy += 1;
+        if (y > 600) y = 600, vy -= 1;
+
+        // daca distanta catre player < 50, go to player
+        if (distance(Vector2f(x, y), Vector2f(200, playerY)) < 50) {
+            vx = (200 - x) / 10; // seteaza viteza pe axa x
+            vy = (playerY - y) / 10; // seteaza viteza pe axa y
+        }
+
+        // daca distanta catre player < 10, da bani si autodistrugere
+        if (distance(Vector2f(x, y), Vector2f(200, playerY)) < 10) {
+            balance += 1; // adauga 1 la balanta
+            toBeDeleted = true; // seteaza flag-ul de autodistrugere la true
+            SoundManager::getInstance().playSound("pickup_coin"); // reda sunetul de pickup
+            cout << "DEBUG: played sound cuz x=" << x << " y=" << y << ", dist = " << distance(Vector2f(x, y), Vector2f(200, playerY)) << endl;
+        }
+
+        // frictiune 
+        vx *= 0.96; // aplica frictiunea pe axa x
+        vy *= 0.96; // aplica frictiunea pe axa y
+
+        // se misca in functie de player
+        x += playerVx;
+        // y += playerVy;
+    }
+
+    // metoda pentru desenarea monedei
+    void draw(RenderWindow& window) {
+        // selecteaza textura in functie de animatie
+        Texture& texture = (animation <= 50) 
+            ? TextureManager::getInstance().find("coin1") 
+            : TextureManager::getInstance().find("coin2");
+
+        Sprite sprite(texture);
+        sprite.setPosition(Vector2f(x, y)); // seteaza pozitia sprite-ului
+        sprite.setScale(Vector2f(10.0f / texture.getSize().x, 10.0f / texture.getSize().y)); // seteaza scalarea sprite-ului
+        window.draw(sprite); // deseneaza sprite-ul
+
+        // actualizeaza animatia
+        animation = (animation % 100) + 1;
+    }
+
+    // getters setters deletion
+    bool isToBeDeleted() const { return toBeDeleted; } // getter pentru flag-ul de autodistrugere
+    void setToBeDeleted(bool toBeDeleted) { this->toBeDeleted = toBeDeleted; } // setter pentru flag-ul de autodistrugere
+};
+
+// clasa de exp
+class ExpOrb {
+private:
+    float x, y;       // coordonatele orb-ului
+    int animation;    // animatia orb-ului (de la 1 la 100)
+    float vx, vy;     // viteza pe axa x si y
+    bool toBeDeleted = false; // flag pentru autodistrugere
+    Angle towardsPlayerAngle = sf::radians(0); // unghiul catre player
+public:
+    // constructor
+    ExpOrb(float x, float y) : x(x), y(y) {
+        animation = rand() % 100 + 1; // genereaza o animatie aleatoare intre 1 si 100
+        vx = rand_uniform(-5, 5); // genereaza o viteza aleatoare pe axa x
+        vy = rand_uniform(-5, 5); // genereaza o viteza aleatoare pe axa y
+        toBeDeleted = false; // seteaza flag-ul de autodistrugere la false
+    }
+
+    // getters
+    float getX() const { return x; }
+    float getY() const { return y; }
+    int getAnimation() const { return animation; }
+
+    // setters
+    void setX(float x) { this->x = x; }
+    void setY(float y) { this->y = y; }
+    void setAnimation(int animation) { this->animation = animation; }
+
+    // update
+    void update() {
+        // calculeaza viteza catre player
+        float dx = 200 - x;
+        float dy = playerY - y;
+        float dist = sqrt(dx * dx + dy * dy);
+
+        if (dist > 5) {
+            float angle = atan2(dy, dx); // calculeaza unghiul catre player
+            towardsPlayerAngle = sf::radians(angle); // seteaza unghiul catre player folosind sfml::Angle
+            vx += cos(angle) / 2; // seteaza viteza pe axa x
+            vy += sin(angle) / 2; // seteaza viteza pe axa y
+
+        }
+        // limit viteza orb-ului
+        if (vx > 5) vx = 5;
+        if (vx < -5) vx = -5;
+        if (vy > 5) vy = 5;
+        if (vy < -5) vy = -5;
+
+        // actualizeaza pozitia orb-ului
+        x += vx;
+        y += vy;
+
+        // player
+        x += playerVx;
+        // y += playerVy;
+
+        // daca distanta catre player < 10, creste xp level si autodistrugere
+        if (distance(Vector2f(x, y), Vector2f(200, playerY)) < 10) {
+            // Creste nivelul de experienta
+            xp += rand() % 10 + 1; // adauga un numar aleatoriu de xp (1-10)
+            cout << "DEBUG: picked up exp orb, xp = " << xp << endl; // afiseaza xp-ul
+            toBeDeleted = true; // seteaza flag-ul de autodistrugere la true
+            SoundManager::getInstance().playSound("pickup_exp"); // reda sunetul de pickup
+        }
+
+        // frictiune mai mare decat Coin
+        vx *= 0.96; // aplica frictiunea pe axa x
+        vy *= 0.96; // aplica frictiunea pe axa y
+    }
+
+    // metoda pentru desenarea orb-ului
+    void draw(RenderWindow& window) {
+        // selecteaza textura in functie de animatie
+        Texture& texture = (animation <= 50) 
+            ? TextureManager::getInstance().find("exp1") 
+            : TextureManager::getInstance().find("exp2");
+
+        Sprite sprite(texture);
+        sprite.setPosition(Vector2f(x, y)); // seteaza pozitia sprite-ului
+        sprite.setScale(Vector2f(10.0f / texture.getSize().x, 10.0f / texture.getSize().y)); // seteaza scalarea sprite-ului
+        window.draw(sprite); // deseneaza sprite-ul
+
+        // actualizeaza animatia
+        animation = (animation % 100) + 1;
+    }
+
+    // getters setters deletion
+    bool isToBeDeleted() const { return toBeDeleted; } // getter pentru flag-ul de autodistrugere
+    void setToBeDeleted(bool toBeDeleted) { this->toBeDeleted = toBeDeleted; } // setter pentru flag-ul de autodistrugere
+};
+
+// -------------------------------------------------------------------- containere --------------------------------------------------------------------
+
 vector<Object> mapObjects;  // container pentru obiectele din harta
 vector<Tile> mapTiles;      // container pentru tile-urile din harta
+vector<Coin> mapCoins;     // container pentru monedele din harta
+vector<ExpOrb> mapExpOrbs; // container pentru orb-urile de exp din harta
+vector<ItemObject> worldItems;
+// inamici & entitati
+vector<EnemyGoblin> mapGoblins; // container pentru inamicii de tip goblin
+vector<EnemyBaphomet> mapBaphomets; // container pentru inamicii de tip Baphomet
+
+// ---------------------------------------------------------- functiile folosite de obiecte --------------------------------------------------------------------
+
+void spawnCoinAt(float x, float y) {
+    mapCoins.push_back(Coin(x, y)); // adauga o moneda la coordonatele x, y
+}
+
+void spawnXPAt(float x, float y) {
+    mapExpOrbs.push_back(ExpOrb(x, y)); // adauga un orb de exp la coordonatele x, y
+}
+
+void playerTakeDamage(int damage) {
+    // daca are scut, scade din scut
+    // daca nu are scut, scade din viata
+    if (playerArmor > 0) {
+        playerArmor -= damage; // scade din scut
+        if (playerArmor < 0) {
+            playerHealth += playerArmor; // scade din viata
+            playerArmor = 0; // seteaza scutul la 0
+        }
+    } else {
+        playerHealth -= damage; // scade din viata
+    }
+}
 
 // -------------------------------------------------------------------- controale --------------------------------------------------------------------
 void controls() {
-    //todo player sa se miste cu playerX dar camera sa "urmareasca" dupa player
     if (keysPressed[static_cast<int>(Keyboard::Key::W)]) {  // daca tasta W este apasata
-        playerY -= playerSpeed;
+        playerVy -= playerSpeed;
     }
     if (keysPressed[static_cast<int>(Keyboard::Key::S)]) {  // daca tasta S este apasata
-        playerY += playerSpeed;
+        playerVy += playerSpeed;
     }
     if (keysPressed[static_cast<int>(Keyboard::Key::A)]) {  // daca tasta A este apasata
-        playerX -= playerSpeed;
+        playerVx += playerSpeed;
     }
     if (keysPressed[static_cast<int>(Keyboard::Key::D)]) {  // daca tasta D este apasata
-        playerX += playerSpeed;
+        playerVx -= playerSpeed;
     }
+
+    // dashing
+    if (keysPressed[static_cast<int>(Keyboard::Key::Space)]) {  // daca tasta Space este apasata
+        if (canDash) {
+            dashing = true; // activeaza dash-ul
+            playerVx *= dashSpeed; // seteaza viteza de dash
+            playerVy *= dashSpeed; // seteaza viteza de dash
+        }
+    }
+
+    // if (keysPressed[static_cast<int>(Keyboard::Key::Escape)]) {  // daca tasta Escape este apasata
+    //     exit(0); // iese din program
+    // }
+
+    // // debug: C = spawns coins at 500, 300
+    // if (keysPressed[static_cast<int>(Keyboard::Key::C)]) {  // daca tasta C este apasata
+    //     mapCoins.push_back(Coin(500, 300)); // adauga o moneda la coordonatele 500, 300
+    // }
+
+    // // debug: V = spawns exp orbs at 500, 300
+    // if (keysPressed[static_cast<int>(Keyboard::Key::V)]) {  // daca tasta V este apasata
+    //     mapExpOrbs.push_back(ExpOrb(500, 300)); // adauga un exp orb la coordonatele 500, 300
+    // }
+
+    // debug: X = spawns goblin at 500, 300
+    if (keysPressed[static_cast<int>(Keyboard::Key::X)] && frameCount % 10 == 0) {  // daca tasta X este apasata si frameCount % 10 == 0
+        mapGoblins.push_back(EnemyGoblin(500, 300, 100, 10, true)); // adauga un goblin la coordonatele 500, 300
+        cout << "DEBUG: spawned goblin at 500, 300" << endl; // afiseaza mesaj de spawn
+    }
+
+    // debug: B = spawns baphomet at 600, 300
+    if (keysPressed[static_cast<int>(Keyboard::Key::B)] && frameCount % 10 == 0) {  // daca tasta B este apasata si frameCount % 10 == 0
+        mapBaphomets.push_back(EnemyBaphomet(600, 300)); // adauga un baphomet la coordonatele 600, 300
+        cout << "DEBUG: spawned baphomet at 600, 300" << endl; // afiseaza mesaj de spawn
+    }
+
+    // cout << "dashing data: " << "dashing: " << dashing << " canDash: " << canDash << " dashDuration: " << dashDuration << " dashCooldown: " << dashCooldown << endl;
 }
 
 // -------------------------------------------------------------------- initializare --------------------------------------------------------------------
 void init() {
+    frameCount = 0; // initializeaza frameCount
+    // map textures
+    TextureManager::getInstance().justLoad("dirt");
+    TextureManager::getInstance().justLoad("stone");
+    TextureManager::getInstance().justLoad("grass1");
+    TextureManager::getInstance().justLoad("grass2");
+    TextureManager::getInstance().justLoad("grass3");
+    // player textures
+    TextureManager::getInstance().justLoad("player_still");
+    TextureManager::getInstance().justLoad("player_move_1");
+    TextureManager::getInstance().justLoad("player_move_2");
+    TextureManager::getInstance().justLoad("player_move_1_mirror");
+    TextureManager::getInstance().justLoad("player_move_2_mirror");
+    TextureManager::getInstance().justLoad("player_dash");
+    TextureManager::getInstance().justLoad("player_dash_mirror");
+    // weapon textures
+    TextureManager::getInstance().justLoad("weapon_basic_sword");
+    // coin textures
+    TextureManager::getInstance().justLoad("coin1");
+    TextureManager::getInstance().justLoad("coin2");
+    // exp textures
+    TextureManager::getInstance().justLoad("exp1");
+    TextureManager::getInstance().justLoad("exp2");
+    // icons
+    TextureManager::getInstance().justLoad("xp");
+    TextureManager::getInstance().justLoad("shield");
+    TextureManager::getInstance().justLoad("heart");
+    // enemy gobllin
+    TextureManager::getInstance().justLoad("enemy_goblin_walk1");
+    TextureManager::getInstance().justLoad("enemy_goblin_walk2");
+    TextureManager::getInstance().justLoad("enemy_goblin_attack");
+    TextureManager::getInstance().justLoad("enemy_goblin_walk1_mirror");
+    TextureManager::getInstance().justLoad("enemy_goblin_walk2_mirror");
+    TextureManager::getInstance().justLoad("enemy_goblin_attack_mirror");
+    // enemy baphomet
+    TextureManager::getInstance().justLoad("enemy_baphomet_walk1");
+    TextureManager::getInstance().justLoad("enemy_baphomet_walk2");
+    TextureManager::getInstance().justLoad("enemy_baphomet_attack");
+    TextureManager::getInstance().justLoad("enemy_baphomet_walk1_mirror");
+    TextureManager::getInstance().justLoad("enemy_baphomet_walk2_mirror");
+    TextureManager::getInstance().justLoad("enemy_baphomet_attack_mirror");
+
     srand(time(NULL));  // initializeaza generatorul de numere aleatorii
     // adauga obiecte in containerul mapObjects
     mapObjects.push_back(Object(100, 150, 20, Color::Red));
@@ -141,13 +1138,28 @@ void init() {
     worldItems.push_back(ItemObject(Object(350, 350, 10, Color::Magenta), std::make_shared<Item>("Rare Gloves", ItemType::Equipment)));
     worldItems.push_back(ItemObject(Object(450, 450, 10, Color::Yellow), std::make_shared<Item>("Gold Coin", ItemType::Coin, 10)));
 
+    // init player pos
+    playerX = 200;
+    playerY = 300;
+    playerVx = 0;
+    playerVy = 0;
 
     // 80x60
     for (int i = 0; i < 84/4; i++) {
         for (int j = 0; j < 64/4; j++) {
-            mapTiles.push_back(Tile(i * 40 - 40, j * 40 - 40, 39, 39, Color::Black));
+            mapTiles.push_back(Tile(i * 40 - 40, j * 40 - 40, 40, 40, Color::Black));
+
+            auto random = rand_uniform(0, 100);
+            if (random < 8) { // 8% chance
+                mapTiles.back().setType("grass1");
+            } else if (random < 8 + 10) { // 10% chance
+                mapTiles.back().setType("grass3");
+            } else { // 82% chance
+                mapTiles.back().setType("grass2");
+            }
         }
     }
+
 }
 
 // -------------------------------------------------------------------- update --------------------------------------------------------------------
@@ -156,27 +1168,65 @@ void update(RenderWindow& window) {
     if (playerY < 0) playerY = 0;
     if (playerY > 600) playerY = 600;
 
-    // actualizeaza pozitia obiectelor (efect parallax)
-    for (Object& obj : mapObjects) {
-        if (keysPressed[static_cast<int>(Keyboard::Key::A)]) {
-            obj.x += playerSpeed;
+    // limiteaza videocitatea jucatorului
+    if (!dashing) {
+        if (playerVx > SPEED_LIMIT) playerVx = SPEED_LIMIT;
+        if (playerVx < -SPEED_LIMIT) playerVx = -SPEED_LIMIT;
+        if (playerVy > SPEED_LIMIT) playerVy = SPEED_LIMIT;
+        if (playerVy < -SPEED_LIMIT) playerVy = -SPEED_LIMIT;
+    } else {
+        if (playerVx > dashSpeed) playerVx = dashSpeed;
+        if (playerVx < -dashSpeed) playerVx = -dashSpeed;
+        if (playerVy > dashSpeed) playerVy = dashSpeed;
+        if (playerVy < -dashSpeed) playerVy = -dashSpeed;
+    }
+
+    if (abs(playerVx) < 0.1f) playerVx = 0; // opreste miscarea pe axa x daca viteza este foarte mica
+    if (abs(playerVy) < 0.1f) playerVy = 0; // opreste miscarea pe axa y daca viteza este foarte mica
+    // pt ca la dash sa nu se miste jucatorul in diagonala random
+    if (abs(playerVx) == 0 && abs(playerVy) == 0) {
+        notMoving = true; // jucatorul nu se misca
+    } else {
+        notMoving = false; // jucatorul se misca
+    }
+
+    // dash mechanics
+    if (dashing) {
+        playerSpeed += 0.1f; // creste viteza in dash
+        dashDuration -= 1; // scade durata dash-ului
+        if (dashDuration <= 0) {
+            dashing = false; // opreste dash-ul
+            canDash = false; // cooldown-ul incepe
+            dashDuration = 30; // resetare durata dash-ului
         }
-        if (keysPressed[static_cast<int>(Keyboard::Key::D)]) {
-            obj.x -= playerSpeed;
+    } else {
+        if (!canDash) {
+            dashCooldown -= 1; // scade cooldown-ul
+            if (dashCooldown <= 0) {
+                canDash = true; // dash-ul este disponibil din nou
+                dashCooldown = 60*3; // resetare cooldown
+            }
         }
     }
 
+    // actualizeaza pozitia jucatorului in functie de viteza si input-ul tastaturii
+    playerX += playerVx;
+    playerY += playerVy;
+
+    // frictiune movement player
+    playerVx *= 0.95f; // reduce viteza pe axa x
+    playerVy *= 0.95f; // reduce viteza pe axa y
+
+    // actualizeaza pozitia obiectelor
+    for (Object& obj : mapObjects) {
+        obj.x += playerVx;
+    }
+
     for (auto& obj : worldItems) {
-        if(obj.pickedUp)
-        {
+        if(obj.pickedUp) {
             continue;
         }
-        if (keysPressed[static_cast<int>(Keyboard::Key::A)]) {
-            obj.obj.x += playerSpeed;
-        }
-        if (keysPressed[static_cast<int>(Keyboard::Key::D)]) {
-            obj.obj.x -= playerSpeed;
-        }
+        obj.obj.x += playerVx;
     }
 
     if (keysPressed[static_cast<int>(Keyboard::Key::E)]) {
@@ -193,43 +1243,322 @@ void update(RenderWindow& window) {
 
     // move tiles but their x % 10 so they repeat
     for (Tile& tile : mapTiles) {
-        if (keysPressed[static_cast<int>(Keyboard::Key::A)]) {
-            tile.x += playerSpeed;
-            if (tile.x > 800) tile.x -= 840.0f;
-            if (tile.x < -40) tile.x += 840.0f;
-        }
-        if (keysPressed[static_cast<int>(Keyboard::Key::D)]) {
-            tile.x -= playerSpeed;
-            if (tile.x > 800) tile.x -= 840.0f;
-            if (tile.x < -40) tile.x += 840.0f;
-        }
+        tile.setX(tile.getX() + playerVx);
+        if (tile.getX() > 800) tile.setX(tile.getX() - 840.0f);
+        if (tile.getX() < -40) tile.setX(tile.getX() + 840.0f);
     }
 
+    // xp mechanics
+    if (xp >= levelXP) {
+        level += 1; // creste nivelul jucatorului
+        xp = 0; // resetare xp
+        levelXP += levelXP / 9;
+
+        // creste armura maxima
+        playerMaxArmor += rand() % 10 + 2; // adauga un numar aleatoriu de armura maxima (1-5)
+        
+        // creste viata maxima
+        playerMaxHealth += 5; 
+
+        // creste viata curenta cu 50%
+        playerHealth += playerMaxHealth / 2; // creste viata curenta 
+        if (playerHealth > playerMaxHealth) playerHealth = playerMaxHealth; // limiteaza viata curenta la maxima
+        
+        // creste armura curenta cu 50%
+        playerArmor += playerMaxArmor / 2; // creste armura curenta
+        if (playerArmor > playerMaxArmor) playerArmor = playerMaxArmor; // limiteaza armura curenta la maxima
+
+        playerDamageMultiplier += rand_uniform(0.1f, 0.3f); // creste damage multiplier-ul
+    }
+
+    // player health mechanics
+    if (playerHealth <= 0) {
+        playerHealth = 0; // limiteaza viata curenta la 0
+        playerArmor = 0; // limiteaza armura curenta la 0
+        cout << "DEBUG: player is dead" << endl; // afiseaza mesaj de moarte
+        // play dead.wav
+        SoundManager::getInstance().playSound("dead"); // reda sunetul de moarte
+        // messagebox with you died
+        MessageBoxA(NULL, "You died!", "Game Over", MB_OK | MB_ICONERROR); // afiseaza mesaj de moarte
+
+        // restart the exe
+        system("start /B /WAIT /MIN cmd /C start \"\" \"./bin/bloodwavez.exe\""); // restarteaza jocul
+
+        exit(0); // iese din program
+    } else if (playerHealth > playerMaxHealth) {
+        playerHealth = playerMaxHealth; // limiteaza viata curenta la maxima
+    }
+    if (playerArmor > playerMaxArmor) {
+        playerArmor = playerMaxArmor; // limiteaza armura curenta la maxima
+    }
+    if (playerArmor < 0) {
+        playerArmor = 0; // limiteaza armura curenta la 0
+    }
 }
 
 // -------------------------------------------------------------------- desenare --------------------------------------------------------------------
+void drawPlayerAt(RenderWindow& window, float x, float y, float speed = 0, float scale = 0.1f) {
+    // deseneaza jucatorul in functie de viteza si pozitie
+    Texture* texture;
+    if (notMoving) {
+        texture = &TextureManager::getInstance().find("player_still");
+    } else if (playerVx < 0 && moveAnimationCounter % 40 < 20) {
+        texture = &TextureManager::getInstance().find("player_move_2");
+        moveAnimationCounter ++;
+    } else if (playerVx < 0 && moveAnimationCounter % 40 >= 20) {
+        texture = &TextureManager::getInstance().find("player_move_1");
+        moveAnimationCounter ++;
+    } else if (playerVx > 0 && moveAnimationCounter % 40 < 20) {
+        texture = &TextureManager::getInstance().find("player_move_2_mirror");
+        moveAnimationCounter ++;
+    } else if (playerVx > 0 && moveAnimationCounter % 40 >= 20) {
+        texture = &TextureManager::getInstance().find("player_move_1_mirror");
+        moveAnimationCounter ++;
+    } else {
+        texture = &TextureManager::getInstance().find("player_still");
+    }
+
+    if (dashing && playerVx < 0) {
+        texture = &TextureManager::getInstance().find("player_dash");
+    } else if (dashing && playerVx > 0) {
+        texture = &TextureManager::getInstance().find("player_dash_mirror");
+    }
+
+    Sprite sprite(*texture);
+    sprite.setOrigin(Vector2f(texture->getSize().x / 2, texture->getSize().y / 2)); // seteaza originea sprite-ului la mijlocul lui
+    sprite.setScale(Vector2f(scale, scale)); // seteaza scalarea sprite-ului
+    sprite.setPosition(Vector2f(x, y)); // seteaza pozitia sprite-ului (folosim vector2f)
+    window.draw(sprite); // deseneaza sprite-ul
+}
+
+void drawPlayerWeapon(RenderWindow& window) {
+    int handX = 214 - ((playerVx > 0)?30:0); // pozitia mainii pe axa x
+
+    if (playerHolding == "weapon_basic_sword") {
+        Texture& texture = TextureManager::getInstance().find("weapon_basic_sword");
+        Sprite sprite(texture);
+        sprite.setOrigin(Vector2f(texture.getSize().x / 2, texture.getSize().y / 3 * 2)); // seteaza originea sprite-ului la mijlocul X si 1/3 din Y (manerul)
+        sprite.setScale(Vector2f(0.11f, 0.11f)); // seteaza scalarea sprite-ului
+        sprite.setPosition(Vector2f(handX, playerY)); // seteaza pozitia sprite-ului (folosim vector2f)
+        
+        // Calculeaza unghiul de rotatie catre mouse
+        float angle = atan2(mouseY - playerY, mouseX - (212)) * 180 / 3.14159f + 90; // +90 pentru a alinia sprite-ul
+        sprite.setRotation(sf::degrees(angle)); // seteaza rotatia sprite-uluis
+        
+        window.draw(sprite); // deseneaza sprite-ul
+
+        // // draw hitbox-ul 1 (DEBUG) = tip-ul sabiei
+        // CircleShape circle(5); // creeaza un cerc cu raza 20
+        // circle.setFillColor(Color::Red); // seteaza culoarea cercului ca transparenta
+        // circle.setOutlineColor(Color::Transparent); // seteaza culoarea conturului cercului ca rosu
+        // circle.setPosition(Vector2f(handX - cos(angle / 180 * 3.14f + 3.14f/2.0f) * 30, playerY - sin(angle / 180 * 3.14f + 3.14f/2.0f) * 30)); // seteaza pozitia cercului (folosim vector2f)
+        // window.draw(circle); // deseneaza cercul
+        // // draw hitbox-ul 2 (DEBUG) = tip-ul sabiei
+        // circle.setFillColor(Color::Red); // seteaza culoarea cercului ca transparenta
+        // circle.setOutlineColor(Color::Transparent); // seteaza culoarea conturului cercului ca rosu
+        // circle.setPosition(Vector2f(handX - cos(angle / 180 * 3.14f + 3.14f/2.0f) * 37, playerY - sin(angle / 180 * 3.14f + 3.14f/2.0f) * 37)); // seteaza pozitia cercului (folosim vector2f)
+        // window.draw(circle); // deseneaza cercul
+
+        swordHitbox1 = Vector2f(handX - cos(angle / 180 * 3.14f + 3.14f/2.0f) * 30, playerY - sin(angle / 180 * 3.14f + 3.14f/2.0f) * 30); // seteaza pozitia hitbox-ului sabiei (folosim vector2f)
+        swordHitbox2 = Vector2f(handX - cos(angle / 180 * 3.14f + 3.14f/2.0f) * 37, playerY - sin(angle / 180 * 3.14f + 3.14f/2.0f) * 37); // seteaza pozitia hitbox-ului sabiei (folosim vector2f)
+    }
+}
+
+void drawCoins(RenderWindow& window) {
+    for (Coin& coin : mapCoins) {
+        coin.update(); // actualizeaza moneda
+        coin.draw(window); // deseneaza moneda
+
+        // deja exista o limitare in obiect dar asta nu strica
+        if (coin.getX() < 0) coin.setX(0); // limiteaza moneda pe axa x
+        if (coin.getX() > 800) coin.setX(800); // limiteaza moneda pe axa x
+        if (coin.getY() < 0) coin.setY(0); // limiteaza moneda pe axa y
+        if (coin.getY() > 600) coin.setY(600); // limiteaza moneda pe axa y
+
+        // delete moneda daca este autodistrusa
+        if (coin.isToBeDeleted()) {
+            auto it = remove_if(mapCoins.begin(), mapCoins.end(), [](Coin& c) { return c.isToBeDeleted(); });
+            mapCoins.erase(it, mapCoins.end()); // sterge moneda din vector
+        }
+    }
+}
+
+void drawExpOrbs(RenderWindow& window) {
+    for (ExpOrb& orb : mapExpOrbs) {
+        orb.update(); // actualizeaza orb-ul
+        orb.draw(window); // deseneaza orb-ul
+
+        // delete orb daca este autodistrus
+        if (orb.isToBeDeleted()) {
+            auto it = remove_if(mapExpOrbs.begin(), mapExpOrbs.end(), [](ExpOrb& o) { return o.isToBeDeleted(); });
+            mapExpOrbs.erase(it, mapExpOrbs.end()); // sterge orb-ul din vector
+        }
+    }
+}
+
+void drawBars(RenderWindow& window) {
+    // draw health bar
+    RectangleShape healthBar(Vector2f(200, 10)); // creeaza un dreptunghi cu dimensiunile specificate
+    healthBar.setFillColor(Color::Green); // seteaza culoarea
+    healthBar.setPosition(Vector2f(10, 10)); // seteaza pozitia (folosim vector2f)
+    healthBar.setSize(Vector2f(200 * (float)((float)playerHealth / (float)playerMaxHealth), 10)); // seteaza dimensiunile
+    window.draw(healthBar); // deseneaza dreptunghiul
+
+    // draw armor bar
+    RectangleShape armorBar(Vector2f(200, 20)); // creeaza un dreptunghi cu dimensiunile specificate
+    armorBar.setFillColor(Color::Blue); // seteaza culoarea
+    armorBar.setPosition(Vector2f(10, 30)); // seteaza pozitia (folosim vector2f)
+    armorBar.setSize(Vector2f(200 * (float)((float)playerArmor / (float)playerMaxArmor), 10)); // seteaza dimensiunile
+    window.draw(armorBar); // deseneaza dreptunghiul
+
+    // draw xp bar
+    RectangleShape xpBar(Vector2f(200, 30)); // creeaza un dreptunghi cu dimensiunile specificate
+    xpBar.setFillColor(Color::Yellow); // seteaza culoarea
+    xpBar.setPosition(Vector2f(10, 50)); // seteaza pozitia (folosim vector2f)
+    xpBar.setSize(Vector2f(200 * (float)((float)xp / (float)levelXP), 10)); // seteaza dimensiunile
+    window.draw(xpBar); // deseneaza dreptunghiul
+
+    // draw the 2px strok for each bar above
+    RectangleShape healthBarStroke(Vector2f(200, 10)); // creeaza un dreptunghi cu dimensiunile specificate
+    healthBarStroke.setFillColor(Color::Transparent); // seteaza culoarea
+    RectangleShape armorBarStroke(Vector2f(200, 10)); // creeaza un dreptunghi cu dimensiunile specificate
+    armorBarStroke.setFillColor(Color::Transparent); // seteaza culoarea
+    RectangleShape xpBarStroke(Vector2f(200, 10)); // creeaza un dreptunghi cu dimensiunile specificate
+    xpBarStroke.setFillColor(Color::Transparent); // seteaza culoarea
+
+    healthBarStroke.setOutlineThickness(2); // seteaza grosimea conturului
+    healthBarStroke.setOutlineColor(Color::Black); // seteaza culoarea conturului
+    armorBarStroke.setOutlineThickness(2); // seteaza grosimea conturului
+    armorBarStroke.setOutlineColor(Color::Black); // seteaza culoarea conturului
+    xpBarStroke.setOutlineThickness(2); // seteaza grosimea conturului
+    xpBarStroke.setOutlineColor(Color::Black); // seteaza culoarea conturului
+
+    healthBarStroke.setPosition(Vector2f(10, 10)); // seteaza pozitia (folosim vector2f)
+    armorBarStroke.setPosition(Vector2f(10, 30)); // seteaza pozitia (folosim vector2f)
+    xpBarStroke.setPosition(Vector2f(10, 50)); // seteaza pozitia (folosim vector2f)
+
+    window.draw(healthBarStroke); // deseneaza dreptunghiul
+    window.draw(armorBarStroke); // deseneaza dreptunghiul
+    window.draw(xpBarStroke); // deseneaza dreptunghiul
+
+    // draw icons next to the bars
+    Texture& heartTexture = TextureManager::getInstance().find("heart");
+    Sprite heartSprite(heartTexture);
+    heartSprite.setPosition(Vector2f(217, 11-5)); // seteaza pozitia (folosim vector2f)
+    heartSprite.setScale(Vector2f(0.03f, 0.03f)); // seteaza scalarea sprite-ului
+    window.draw(heartSprite); // deseneaza sprite-ul
+
+    Texture& shieldTexture = TextureManager::getInstance().find("shield");
+    Sprite shieldSprite(shieldTexture);
+    shieldSprite.setPosition(Vector2f(217, 29-5)); // seteaza pozitia (folosim vector2f)
+    shieldSprite.setScale(Vector2f(0.03f, 0.03f)); // seteaza scalarea sprite-ului
+    window.draw(shieldSprite); // deseneaza sprite-ul
+
+    Texture& xpTexture = TextureManager::getInstance().find("xp");
+    Sprite xpSprite(xpTexture);
+    xpSprite.setPosition(Vector2f(217, 48)); // seteaza pozitia (folosim vector2f)
+    xpSprite.setScale(Vector2f(0.02f, 0.02f)); // seteaza scalarea sprite-ului
+    window.draw(xpSprite); // deseneaza sprite-ul
+}
+
+void drawText(RenderWindow& window) {
+    // show lvl and money under the bars
+    Font font;
+    if (!font.openFromFile("./res/PixelPurl.ttf")) {
+        cout << "Failed to load font: PixelPurl.ttf" << endl;
+        return;
+    }
+
+    Text levelText(font, "LVL " + to_string(level) + " | " + to_string(balance) + "$", 27); // creeaza un text cu font-ul specificat
+    levelText.setFont(font); // seteaza font-ul text-ului
+    levelText.setFillColor(Color::White);
+    levelText.setPosition(Vector2f(10, 60));
+
+    // Create shadow text
+    Text shadowText = levelText; // Copy the original text properties
+    shadowText.setFillColor(Color::Black); // Set shadow color
+    shadowText.setPosition(levelText.getPosition() + Vector2f(2, 2)); // Offset the shadow
+
+    window.draw(shadowText); // Draw the shadow first
+    window.draw(levelText); // Draw the original text on top
+
+    // show health/max health and armor/max and xp/next xp to the right of the bars
+    Text healthText(font, to_string(playerHealth) + "/" + to_string(playerMaxHealth), 18);
+    healthText.setFont(font);
+    healthText.setFillColor(Color::White);
+    healthText.setPosition(Vector2f(240, 8-5)); // Position to the right of the health bar icon
+
+    Text armorText(font, to_string(playerArmor) + "/" + to_string(playerMaxArmor), 18);
+    armorText.setFont(font);
+    armorText.setFillColor(Color::White);
+    armorText.setPosition(Vector2f(240, 28-5)); // Position to the right of the armor bar icon
+
+    Text xpText(font, to_string(xp) + "/" + to_string(levelXP), 18);
+    xpText.setFont(font);
+    xpText.setFillColor(Color::White);
+    xpText.setPosition(Vector2f(240, 48-5)); // Position to the right of the xp bar icon
+
+    // Create shadow texts
+    Text healthShadow = healthText;
+    healthShadow.setFillColor(Color::Black);
+    healthShadow.setPosition(healthText.getPosition() + Vector2f(1, 1)); // Offset shadow
+
+    Text armorShadow = armorText;
+    armorShadow.setFillColor(Color::Black);
+    armorShadow.setPosition(armorText.getPosition() + Vector2f(1, 1)); // Offset shadow
+
+    Text xpShadow = xpText;
+    xpShadow.setFillColor(Color::Black);
+    xpShadow.setPosition(xpText.getPosition() + Vector2f(1, 1)); // Offset shadow
+
+    // Draw shadows first
+    window.draw(healthShadow);
+    window.draw(armorShadow);
+    window.draw(xpShadow);
+
+    // Draw original texts on top
+    window.draw(healthText);
+    window.draw(armorText);
+    window.draw(xpText);
+}
+
+// draw all enemies
+void drawEnemies(RenderWindow& window) {
+    // GOBLINS
+    for (EnemyGoblin& enemy : mapGoblins) {
+        enemy.update(window); // actualizeaza inamicul
+        enemy.draw(window); // deseneaza inamicul
+
+        // delete inamic daca este autodistrus
+        if (enemy.isToBeDeleted()) {
+            auto it = remove_if(mapGoblins.begin(), mapGoblins.end(), [](EnemyGoblin& e) { return e.isToBeDeleted(); });
+            mapGoblins.erase(it, mapGoblins.end()); // sterge inamicul din vector
+        }
+    }
+
+    // BAPHOMETS
+    for (EnemyBaphomet& enemy : mapBaphomets) {
+        enemy.update(window); // actualizeaza inamicul
+        enemy.draw(window); // deseneaza inamicul
+
+        // delete inamic daca este autodistrus
+        if (enemy.isToBeDeleted()) {
+            auto it = remove_if(mapBaphomets.begin(), mapBaphomets.end(), [](EnemyBaphomet& e) { return e.isToBeDeleted(); });
+            mapBaphomets.erase(it, mapBaphomets.end()); // sterge inamicul din vector
+        }
+    }
+}
+
 void draw(RenderWindow& window) {
     // deseneaza fiecare tile din vectorul mapTiles
     for (Tile& tile : mapTiles) {
         tile.draw(window);
     }
 
+    // weapon
+    drawPlayerWeapon(window); // desenare sabie la pozitia (210, playerY)
     // desenare jucator: un cerc verde
-    CircleShape player(10);
-    player.setFillColor(Color::Green);
-    player.setPosition(Vector2f(200, playerY)); // pozitia jucatorului
-    window.draw(player);
-
-    // desenare sabie: un dreptunghi rosu indiat de mouse
-    RectangleShape sword(Vector2f(100, 5));
-    sword.setFillColor(Color::Red);
-    sword.setPosition(Vector2f(200, playerY)); // pozitia jucatorului
-    sword.setOrigin(Vector2f(0, 2.5)); // seteaza originea dreptunghiului la mijlocul lui pe verticala
-    
-    float angle = atan2(mouseY - playerY, mouseX - 200) * 180 / 3.14159; // calculeaza unghiul in radiani si il converteste in grade
-
-    sword.setRotation(degrees(angle)); // conversie in grade (sf::degrees returnează un sf::Angle)
-    window.draw(sword);
+    drawPlayerAt(window, 200, playerY); // desenare jucator la pozitia (200, playerY) cu viteza 0
 
     // deseneaza fiecare obiect din vectorul mapObjects
     for (Object& obj : mapObjects) {
@@ -242,10 +1571,24 @@ void draw(RenderWindow& window) {
             worldItem.obj.draw(window);
         }
     }
+
+    drawEnemies(window); // desenare inamici
+
+    drawExpOrbs(window); // desenare orb-uri de exp
+    drawCoins(window); // desenare monede
+
+    // those needs 2 be on top
+    drawBars(window); // desenare bare de viata, armura si xp
+    drawText(window); // desenare text cu nivelul si banii
 }
 
 // -------------------------------------------------------------------- main --------------------------------------------------------------------
 int main() {
+    AllocConsole(); // aloca o consola pentru aplicatie PT DEBUG
+    freopen("CONOUT$", "w", stdout); // redirectioneaza stdout catre consola alocata
+    freopen("CONOUT$", "w", stderr); // redirectioneaza stderr catre consola alocata
+    if (RELEASE) ShowWindow(GetConsoleWindow(), SW_HIDE); // ascunde fereastra consolei cand va fi RELEASEs
+
     // creeaza fereastra jocului cu dimensiuni 800x600 si titlul "project"
     RenderWindow window(VideoMode({800, 600}, 32), "project");
     window.setFramerateLimit(FPS_LIMIT);
@@ -301,6 +1644,8 @@ int main() {
         update(window);       // actualizeaza starea jocului
         draw(window);       // deseneaza totul in fereastra
         window.display();   // afiseaza continutul desenat pe ecran
+
+        frameCount++; // creste numarul de frame-uri
     }
     return 0;  // intoarce 0 la terminarea executiei
 }
