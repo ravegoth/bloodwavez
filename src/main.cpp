@@ -82,6 +82,12 @@ int playerArmor = 0; // armura jucatorului
 int playerMaxArmor = 100; // armura maxima a jucatorului
 int playerDamageMultiplier = 1; // muliplicatorul de damage al jucatorului care va fi inmultit cu damage-ul armei
 
+
+// ---------------------------------------------------- functii folosite de obiecte (forward decl) -----------------------------------------------------------
+
+void spawnCoinAt(float x, float y);
+void spawnXPAt(float x, float y);
+
 // -------------------------------------------------------------------- obiecte --------------------------------------------------------------------
 
 // obiect abstract (nu exista scop inca)
@@ -110,8 +116,6 @@ struct ItemObject {
 
     ItemObject(Object obj, std::shared_ptr<Item> item) : obj(obj), item(item) {}
 };
-
-vector<ItemObject> worldItems;
 
 class SoundManager {
 private:
@@ -257,14 +261,14 @@ public:
     
     // metoda pentru desenarea tile-ului in fereastra
     void draw(RenderWindow& window) {
-        RectangleShape rect(Vector2f(width, height)); // creeaza un dreptunghi cu dimensiunile specificate
-        rect.setFillColor(color);                      // seteaza culoarea
-        rect.setPosition(Vector2f(x, y));              // seteaza pozitia (folosim vector2f)
-        // white stroke
-        rect.setOutlineColor(Color::White);            // seteaza culoarea conturului
-        rect.setOutlineThickness(1);                   // seteaza grosimea conturului
-        rect.setPosition(Vector2f(x, y));              // seteaza pozitia (folosim vector2f)
-        window.draw(rect);                             // deseneaza dreptunghiul
+        // RectangleShape rect(Vector2f(width, height)); // creeaza un dreptunghi cu dimensiunile specificate
+        // rect.setFillColor(color);                      // seteaza culoarea
+        // rect.setPosition(Vector2f(x, y));              // seteaza pozitia (folosim vector2f)
+        // // white stroke
+        // rect.setOutlineColor(Color::White);            // seteaza culoarea conturului
+        // rect.setOutlineThickness(1);                   // seteaza grosimea conturului
+        // rect.setPosition(Vector2f(x, y));              // seteaza pozitia (folosim vector2f)
+        // window.draw(rect);                             // deseneaza dreptunghiul
 
         // if type == "dirt", draw ./res/dirt.png
         if (type == "dirt") {
@@ -278,6 +282,33 @@ public:
         // if type == "stone", draw ./res/stone.png
         if (type == "stone") {
             Texture& texture = TextureManager::getInstance().find("stone");
+            Sprite sprite(texture);
+            sprite.setPosition(Vector2f(x, y)); // seteaza pozitia (folosim vector2f)
+            sprite.setScale(Vector2f(width / texture.getSize().x, height / texture.getSize().y)); // seteaza scalarea pentru a se potrivi dimensiunilor
+            window.draw(sprite); // deseneaza sprite-ul
+        }
+
+        // if type == "grass1", draw ./res/grass1.png
+        if (type == "grass1") {
+            Texture& texture = TextureManager::getInstance().find("grass1");
+            Sprite sprite(texture);
+            sprite.setPosition(Vector2f(x, y)); // seteaza pozitia (folosim vector2f)
+            sprite.setScale(Vector2f(width / texture.getSize().x, height / texture.getSize().y)); // seteaza scalarea pentru a se potrivi dimensiunilor
+            window.draw(sprite); // deseneaza sprite-ul
+        }
+
+        // if type == "grass2", draw ./res/grass2.png
+        if (type == "grass2") {
+            Texture& texture = TextureManager::getInstance().find("grass2");
+            Sprite sprite(texture);
+            sprite.setPosition(Vector2f(x, y)); // seteaza pozitia (folosim vector2f)
+            sprite.setScale(Vector2f(width / texture.getSize().x, height / texture.getSize().y)); // seteaza scalarea pentru a se potrivi dimensiunilor
+            window.draw(sprite); // deseneaza sprite-ul
+        }
+
+        // if type == "grass3", draw ./res/grass3.png
+        if (type == "grass3") {
+            Texture& texture = TextureManager::getInstance().find("grass3");
             Sprite sprite(texture);
             sprite.setPosition(Vector2f(x, y)); // seteaza pozitia (folosim vector2f)
             sprite.setScale(Vector2f(width / texture.getSize().x, height / texture.getSize().y)); // seteaza scalarea pentru a se potrivi dimensiunilor
@@ -300,9 +331,77 @@ public:
     void setType(string type) { this->type = type; } // setter pentru tip
 };
 
+
 // clasa asta sigur va fi mostenita
 class Enemy {
+private:
+    int health; // viata inamicului
+    int maxHealth; // viata maxima a inamicului
+    int damage; // damage-ul inamicului
+    bool isMelee;
+    float x, y;
+    float vx, vy; // viteza pe axa x si y
+    int animation; // animatia inamicului (de la 1 la 100)
+    bool toBeDeleted = false; // DEAD
+    bool isAttacking = false; // flag pentru atac (va schima animatia, si daca e aproape de player si melee va da damage)
+    bool canAttack = true; // flag pentru cooldown-ul atacului
+    int attackCooldown = 60; // current cooldown in frameuri
+    const int attackCooldownStart = 60; // attackCooldown dupa atac = attackCooldownStart
+    int xpOnDrop = 0; // xp-ul pe care il drop-eaza inamicul
+    int coinsOnDrop = 0; // banii pe care ii drop-eaza inamicul
+public:
+// Constructor
+    Enemy(float x, float y, int health, int damage, bool isMelee)
+        : x(x), y(y), health(health), maxHealth(health), damage(damage), isMelee(isMelee), vx(0), vy(0), animation(0), toBeDeleted(false), isAttacking(false) {}
 
+    // Getters
+    float getX() const { return x; }
+    float getY() const { return y; }
+    int getHealth() const { return health; }
+    int getMaxHealth() const { return maxHealth; }
+    int getDamage() const { return damage; }
+    bool isMeleeEnemy() const { return isMelee; }
+    bool isToBeDeleted() const { return toBeDeleted; }
+    bool getIsAttacking() const { return isAttacking; }
+
+    // Setters
+    void setX(float x) { this->x = x; }
+    void setY(float y) { this->y = y; }
+    void setHealth(int health) { this->health = health; }
+    void setToBeDeleted(bool deleted) { this->toBeDeleted = deleted; }
+
+    // Methods
+    void takeDamage(int amount) {
+        if (toBeDeleted) return; // Already dead
+
+        health -= amount;
+        // hit_enemy sound effect:
+        SoundManager::getInstance().playSound("hit_enemy"); // Play hit sound
+
+        if (health <= 0) {
+            health = 0; // Ensure health doesn't go negative
+            toBeDeleted = true;
+
+            // Drop XP and coins
+            for (int i = 0; i < coinsOnDrop; ++i) {
+                // Spawn coin at enemy's position
+                spawnCoinAt(x, y); // Function to spawn coin at enemy's position
+            }
+            for (int i = 0; i < xpOnDrop; ++i) {
+                // Spawn XP item at enemy's position
+                spawnXPAt(x, y); // Function to spawn XP item at enemy's position
+            }
+            
+            // death sound effect:
+            SoundManager::getInstance().playSound("dead_enemy"); // Play death sound
+        }
+    }
+
+    virtual void update() {
+        if (toBeDeleted) return;
+    }
+
+    virtual void draw(RenderWindow& window) {   };
 };
 
 // clasa de bani
@@ -489,6 +588,17 @@ vector<Object> mapObjects;  // container pentru obiectele din harta
 vector<Tile> mapTiles;      // container pentru tile-urile din harta
 vector<Coin> mapCoins;     // container pentru monedele din harta
 vector<ExpOrb> mapExpOrbs; // container pentru orb-urile de exp din harta
+vector<ItemObject> worldItems;
+
+// ---------------------------------------------------------- functiile folosite de obiecte --------------------------------------------------------------------
+
+void spawnCoinAt(float x, float y) {
+    mapCoins.push_back(Coin(x, y)); // adauga o moneda la coordonatele x, y
+}
+
+void spawnXPAt(float x, float y) {
+    mapExpOrbs.push_back(ExpOrb(x, y)); // adauga un orb de exp la coordonatele x, y
+}
 
 // -------------------------------------------------------------------- controale --------------------------------------------------------------------
 void controls() {
@@ -536,6 +646,9 @@ void init() {
     // map textures
     TextureManager::getInstance().justLoad("dirt");
     TextureManager::getInstance().justLoad("stone");
+    TextureManager::getInstance().justLoad("grass1");
+    TextureManager::getInstance().justLoad("grass2");
+    TextureManager::getInstance().justLoad("grass3");
     // player textures
     TextureManager::getInstance().justLoad("player_still");
     TextureManager::getInstance().justLoad("player_move_1");
@@ -582,11 +695,14 @@ void init() {
         for (int j = 0; j < 64/4; j++) {
             mapTiles.push_back(Tile(i * 40 - 40, j * 40 - 40, 39, 39, Color::Black));
 
-            if (rand_uniform(0, 10) > 1) {
-                mapTiles.back().setType("dirt");
-            } else {
-                mapTiles.back().setType("stone");
-            }   
+            auto random = rand_uniform(0, 100);
+            if (random < 8) { // 8% chance
+                mapTiles.back().setType("grass1");
+            } else if (random < 8 + 10) { // 10% chance
+                mapTiles.back().setType("grass3");
+            } else { // 82% chance
+                mapTiles.back().setType("grass2");
+            }
         }
     }
 
