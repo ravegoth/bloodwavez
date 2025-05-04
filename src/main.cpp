@@ -57,8 +57,11 @@ int playerX = 0;
 int playerY = 300; // pozitia initiala a jucatorului
 bool notMoving = true; // flag pentru miscarea jucatorului
 int playerSpeed = 1;              // viteza de miscare a jucatorului
+
 Inventory playerInventory;
 string playerHolding = "weapon_basic_sword"; // arma pe care o tine jucatorul init
+Vector2f swordHitbox1(0, 0); // hitbox-ul armei (sword1)
+Vector2f swordHitbox2(0, 0); // hitbox-ul armei (sword2ss)
 int pickupRadius = 40; // raza de pickup pentru obiecte
 
 float playerVx = 0; // velocitatea pe axa x a jucatorului
@@ -334,7 +337,7 @@ public:
 
 // clasa asta sigur va fi mostenita
 class Enemy {
-private:
+protected:
     int health; // viata inamicului
     int maxHealth; // viata maxima a inamicului
     int damage; // damage-ul inamicului
@@ -346,13 +349,40 @@ private:
     bool isAttacking = false; // flag pentru atac (va schima animatia, si daca e aproape de player si melee va da damage)
     bool canAttack = true; // flag pentru cooldown-ul atacului
     int attackCooldown = 60; // current cooldown in frameuri
-    const int attackCooldownStart = 60; // attackCooldown dupa atac = attackCooldownStart
+    int attackCooldownStart = 60; // attackCooldown dupa atac = attackCooldownStart
     int xpOnDrop = 0; // xp-ul pe care il drop-eaza inamicul
     int coinsOnDrop = 0; // banii pe care ii drop-eaza inamicul
+    float speed = 0.5f; // viteza de miscare a inamicului
+    float maxSpeed = 2.5f; // viteza maxima a inamicului
+    float enemyHeight = 50; // dimensiunile inamicului (pentru hitbox)
+    float enemyWidth = 30; // dimensiunile inamicului (pentru hitbox)
+    float attackRadius = 40; // raza de atac a inamicului (pentru hitbox)
+    int isAttackingAnimation = 0; // animatia de atac (30 frameuri)
 public:
 // Constructor
-    Enemy(float x, float y, int health, int damage, bool isMelee)
-        : x(x), y(y), health(health), maxHealth(health), damage(damage), isMelee(isMelee), vx(0), vy(0), animation(0), toBeDeleted(false), isAttacking(false) {}
+    Enemy(float x, float y, int health, int damage, bool isMelee) {
+        this->x = x; // seteaza pozitia pe axa x
+        this->y = y; // seteaza pozitia pe axa y
+        this->health = health; // seteaza viata inamicului
+        this->damage = damage; // seteaza damage-ul inamicului
+        this->isMelee = isMelee; // seteaza daca inamicul este melee sau ranged
+        vx = 0; // initializare viteza pe axa x
+        vy = 0; // initializare viteza pe axa y
+        animation = 0; // initializare animatie
+        toBeDeleted = false; // initializare DEAD
+        isAttacking = false; // initializare atac
+        canAttack = true; // initializare cooldown atac
+        attackCooldown = 60; // initializare cooldown atac
+        attackCooldownStart = 60; // initializare cooldown atac
+        xpOnDrop = 0; // initializare xp drop
+        coinsOnDrop = 0; // initializare bani drop
+        speed = 0.5f; // initializare viteza de miscare
+        maxSpeed = 2.5f; // initializare viteza maxima
+        enemyHeight = 50; // initializare inaltime inamic
+        enemyWidth = 30; // initializare latime inamic
+        attackRadius = 40; // initializare raza de atac
+        isAttackingAnimation = 0; // initializare animatie de atac
+    }
 
     // Getters
     float getX() const { return x; }
@@ -397,11 +427,195 @@ public:
         }
     }
 
-    virtual void update() {
+    virtual void update(RenderWindow& window) {
         if (toBeDeleted) return;
     }
 
     virtual void draw(RenderWindow& window) {   };
+};
+
+class EnemyGoblin : public Enemy {
+public:
+    EnemyGoblin(float x, float y, int health, int damage, bool isMelee)
+        : Enemy(x, y, health, damage, isMelee) {
+        xpOnDrop = 10 + rand() % 10; // XP dropped when killed
+        coinsOnDrop = 7; // Coins dropped when killed
+        damage = 5; // Damage dealt to player
+        maxHealth = 20 + rand() % 10; // Health of the goblin
+        health = maxHealth; // Set current health to max health
+        attackCooldown = 30; // Cooldown for attack in frames
+        attackCooldownStart = 30; // Cooldown for attack in frames
+        isMelee = true; // Goblin is a melee enemy
+        vx = 0; // Initial velocity on x-axis
+        vy = 0; // Initial velocity on y-axis
+        animation = 0; // Initial animation frame
+        toBeDeleted = false; // Goblin is not dead
+        isAttacking = false; // Goblin is not attacking
+        isAttackingAnimation = 0; // Keep that sprite for 30 frames
+        canAttack = true; // Goblin can attack
+        speed = 0.5f;
+        maxSpeed = 2.5f; // Maximum speed of the goblin
+        this->x = x; // Set goblin's x position
+        this->y = y; // Set goblin's y position
+        this->vx = 0; // Set goblin's x velocity
+        this->vy = 0; // Set goblin's y velocity
+        this->enemyHeight = 50; // Height of the goblin
+        this->enemyWidth = 30; // Width of the goblin
+        attackRadius = 40;
+    }
+
+    void draw(RenderWindow& window) override {
+        // textures:
+        // walk 1 (animation % 50 < 25) = enemy_goblin_walk1.png
+        // walk 2 (animation % 50 >= 25) = enemy_goblin_walk2.png
+        // attack (when isAttacking) = enemy_goblin_attack.png
+        // if he's in the right of the player:
+        // walk 1 mirrored (animation % 50 < 25) = enemy_goblin_walk1_mirror.png
+        // walk 2 mirrored (animation % 50 >= 25) = enemy_goblin_walk2_mirror.png
+        // attack mirrored (when isAttacking) = enemy_goblin_attack_mirror.png
+        Texture& textureWalk1 = TextureManager::getInstance().find("enemy_goblin_walk1");
+        Texture& textureWalk2 = TextureManager::getInstance().find("enemy_goblin_walk2");
+        Texture& textureAttack = TextureManager::getInstance().find("enemy_goblin_attack");
+        Texture& textureWalk1Mirror = TextureManager::getInstance().find("enemy_goblin_walk1_mirror");
+        Texture& textureWalk2Mirror = TextureManager::getInstance().find("enemy_goblin_walk2_mirror");
+        Texture& textureAttackMirror = TextureManager::getInstance().find("enemy_goblin_attack_mirror");
+
+        Sprite sprite(textureWalk1); // Initialize with a valid texture
+
+        // draw (centered) at x, y
+        sprite.setPosition(Vector2f(getX() - textureWalk1.getSize().x / 2, getY() - textureWalk1.getSize().y / 2)); // center the sprite
+        // auto scale the sprite to 30x50 px
+        sprite.setScale(Vector2f(enemyWidth / textureWalk1.getSize().x, enemyHeight / textureWalk1.getSize().y)); // scale the sprite
+        
+        // draw
+        if (isAttackingAnimation > 0) {
+            // draw attack animation
+            if (getX() < 200) {
+                sprite.setTexture(textureAttack); // set texture to attack
+            } else {
+                sprite.setTexture(textureAttackMirror); // set texture to attack mirrored
+            }
+        } else {
+            // draw walk animation
+            if (animation % 50 < 25) {
+                if (getX() < 200) {
+                    sprite.setTexture(textureWalk1); // set texture to walk1
+                } else {
+                    sprite.setTexture(textureWalk1Mirror); // set texture to walk1 mirrored
+                }
+            } else {
+                if (getX() < 200) {
+                    sprite.setTexture(textureWalk2); // set texture to walk2
+                } else {
+                    sprite.setTexture(textureWalk2Mirror); // set texture to walk2 mirrored
+                }
+            }
+        }
+
+        // set the scale to 30x50 px
+        sprite.setScale(Vector2f(30.0f / textureWalk1.getSize().x, 50.0f / textureWalk1.getSize().y)); // scale the sprite
+        // set the position to x, y
+        sprite.setPosition(Vector2f(getX() - 30.0f / 2, getY() - 50.0f / 2)); // center the sprite 
+        // draw the sprite  
+        window.draw(sprite); // draw the sprite
+        // update animation
+        animation = (animation % 100) + 1; // update animation
+    }
+
+    // update
+    void update(RenderWindow& window) override {
+        if (toBeDeleted) return; // Already dead
+
+        // update animation
+        animation = (animation % 100) + 1; // update animation
+        if (isAttackingAnimation > 0) isAttackingAnimation--; // update attack animation
+
+        // update cooldown
+        if (attackCooldown > 0) {
+            attackCooldown--;
+        } else {
+            canAttack = true;
+        }
+
+        // move towards player
+        if (getX() < 200) {
+            vx += speed; // move right
+        } else {
+            vx += -speed; // move left
+        }
+        if (getY() < playerY) {
+            vy += speed; // move down
+        } else {
+            vy += -speed; // move up
+        }
+
+        // limit
+        if (vx > maxSpeed) vx = maxSpeed; // limit speed
+        if (vx < -maxSpeed) vx = -maxSpeed; // limit speed
+        if (vy > maxSpeed) vy = maxSpeed; // limit speed
+        if (vy < -maxSpeed) vy = -maxSpeed; // limit speed
+
+        // check distance to player
+        float distToPlayer = distance(Vector2f(getX(), getY()), Vector2f(200, playerY));
+        float angleToPlayer = atan2(playerY - getY(), 200 - getX()); // calculate angle to player
+        Angle angle(radians(angleToPlayer)); // convert to Angle object
+
+        // // debug: desenaza o linie de la inamic la player
+        // sf::Vertex line[] = {
+        //     {{getX(), getY()}, sf::Color::Red},
+        //     {{200.f, static_cast<float>(playerY)}, sf::Color::Red}
+        // };
+
+        // // debug: draw 30x50 hitbox
+        // sf::Vertex hitbox[] = {
+        //     {{getX() - 30.0f / 2, getY() - 50.0f / 2}, sf::Color::Red},
+        //     {{getX() + 30.0f / 2, getY() - 50.0f / 2}, sf::Color::Red},
+        //     {{getX() + 30.0f / 2, getY() + 50.0f / 2}, sf::Color::Red},
+        //     {{getX() - 30.0f / 2, getY() + 50.0f / 2}, sf::Color::Red}
+        // };
+        // // draw hitbox
+        // window.draw(hitbox, 4, sf::PrimitiveType::LineStrip); // draw the hitbox
+        
+        // line[0].color = sf::Color::Red; // set color to red
+        // line[1].color = sf::Color::Red; // set color to red
+        // window.draw(line, 2, sf::PrimitiveType::Lines); // draw the line
+
+        // if swordhitbox1 or swordhitbox2 is inside the enemy hitbox, take damage
+        // and knockback (velocity 7 * cos/sin) in the opposite direction of the player
+        // not using distance, but using hitbox collision
+        if (swordHitbox1.x > getX() - enemyWidth / 2 && swordHitbox1.x < getX() + enemyWidth / 2 &&
+            swordHitbox1.y > getY() - enemyHeight / 2 && swordHitbox1.y < getY() + enemyHeight / 2) {
+            takeDamage(playerDamageMultiplier * damage); // take damage from player
+            vx += -7 * cos(angleToPlayer); // knockback in the opposite direction of the player
+            vy += -7 * sin(angleToPlayer); // knockback in the opposite direction of the player
+        }
+        if (swordHitbox2.x > getX() - enemyWidth / 2 && swordHitbox2.x < getX() + enemyWidth / 2 &&
+            swordHitbox2.y > getY() - enemyHeight / 2 && swordHitbox2.y < getY() + enemyHeight / 2) {
+            takeDamage(playerDamageMultiplier * damage); // take damage from player
+            vx += -7 * cos(angleToPlayer); // knockback in the opposite direction of the player
+            vy += -7 * sin(angleToPlayer); // knockback in the opposite direction of the player
+        }
+
+        if (distToPlayer < attackRadius && canAttack) { // if close enough to attack
+            isAttacking = true;
+            canAttack = false;
+            attackCooldown = attackCooldownStart; // reset cooldown
+            if (isMelee) {
+                playerHealth -= damage; // deal damage to player
+                isAttackingAnimation = 30; // set attack animation
+                SoundManager::getInstance().playSound("took_damage"); // Play hit sound for player
+            }
+        } else {
+            isAttacking = false;
+        }
+
+        // apply velocity to position
+        x += vx * 0.8f; // apply velocity to x position
+        y += vy * 0.8f; // apply velocity to y position
+
+        x += playerVx; // apply player velocity to x position
+        // y += playerVy; // apply player velocity to y position
+    }
 };
 
 // clasa de bani
@@ -589,6 +803,8 @@ vector<Tile> mapTiles;      // container pentru tile-urile din harta
 vector<Coin> mapCoins;     // container pentru monedele din harta
 vector<ExpOrb> mapExpOrbs; // container pentru orb-urile de exp din harta
 vector<ItemObject> worldItems;
+// inamici & entitati
+vector<EnemyGoblin> mapGoblins; // container pentru inamicii de tip goblin
 
 // ---------------------------------------------------------- functiile folosite de obiecte --------------------------------------------------------------------
 
@@ -628,14 +844,20 @@ void controls() {
     //     exit(0); // iese din program
     // }
 
-    // debug: C = spawns coins at 500, 300
-    if (keysPressed[static_cast<int>(Keyboard::Key::C)]) {  // daca tasta C este apasata
-        mapCoins.push_back(Coin(500, 300)); // adauga o moneda la coordonatele 500, 300
-    }
+    // // debug: C = spawns coins at 500, 300
+    // if (keysPressed[static_cast<int>(Keyboard::Key::C)]) {  // daca tasta C este apasata
+    //     mapCoins.push_back(Coin(500, 300)); // adauga o moneda la coordonatele 500, 300
+    // }
 
-    // debug: V = spawns exp orbs at 500, 300
-    if (keysPressed[static_cast<int>(Keyboard::Key::V)]) {  // daca tasta V este apasata
-        mapExpOrbs.push_back(ExpOrb(500, 300)); // adauga un exp orb la coordonatele 500, 300
+    // // debug: V = spawns exp orbs at 500, 300
+    // if (keysPressed[static_cast<int>(Keyboard::Key::V)]) {  // daca tasta V este apasata
+    //     mapExpOrbs.push_back(ExpOrb(500, 300)); // adauga un exp orb la coordonatele 500, 300
+    // }
+
+    // debug: X = spawns goblin at 500, 300
+    if (keysPressed[static_cast<int>(Keyboard::Key::X)]) {  // daca tasta X este apasata
+        mapGoblins.push_back(EnemyGoblin(500, 300, 100, 10, true)); // adauga un goblin la coordonatele 500, 300
+        cout << "DEBUG: spawned goblin at 500, 300" << endl; // afiseaza mesaj de spawn
     }
 
     // cout << "dashing data: " << "dashing: " << dashing << " canDash: " << canDash << " dashDuration: " << dashDuration << " dashCooldown: " << dashCooldown << endl;
@@ -669,6 +891,13 @@ void init() {
     TextureManager::getInstance().justLoad("xp");
     TextureManager::getInstance().justLoad("shield");
     TextureManager::getInstance().justLoad("heart");
+    // enemy gobllin
+    TextureManager::getInstance().justLoad("enemy_goblin_walk1");
+    TextureManager::getInstance().justLoad("enemy_goblin_walk2");
+    TextureManager::getInstance().justLoad("enemy_goblin_attack");
+    TextureManager::getInstance().justLoad("enemy_goblin_walk1_mirror");
+    TextureManager::getInstance().justLoad("enemy_goblin_walk2_mirror");
+    TextureManager::getInstance().justLoad("enemy_goblin_attack_mirror");
 
     srand(time(NULL));  // initializeaza generatorul de numere aleatorii
     // adauga obiecte in containerul mapObjects
@@ -816,6 +1045,26 @@ void update(RenderWindow& window) {
 
         playerDamageMultiplier += rand_uniform(0.1f, 0.3f); // creste damage multiplier-ul
     }
+
+    // player health mechanics
+    if (playerHealth <= 0) {
+        playerHealth = 0; // limiteaza viata curenta la 0
+        playerArmor = 0; // limiteaza armura curenta la 0
+        cout << "DEBUG: player is dead" << endl; // afiseaza mesaj de moarte
+        // play dead.wav
+        SoundManager::getInstance().playSound("dead"); // reda sunetul de moarte
+        // messagebox with you died
+        MessageBoxA(NULL, "You died!", "Game Over", MB_OK | MB_ICONERROR); // afiseaza mesaj de moarte
+        exit(0); // iese din program
+    } else if (playerHealth > playerMaxHealth) {
+        playerHealth = playerMaxHealth; // limiteaza viata curenta la maxima
+    }
+    if (playerArmor > playerMaxArmor) {
+        playerArmor = playerMaxArmor; // limiteaza armura curenta la maxima
+    }
+    if (playerArmor < 0) {
+        playerArmor = 0; // limiteaza armura curenta la 0
+    }
 }
 
 // -------------------------------------------------------------------- desenare --------------------------------------------------------------------
@@ -869,17 +1118,20 @@ void drawPlayerWeapon(RenderWindow& window) {
         
         window.draw(sprite); // deseneaza sprite-ul
 
-        // draw hitbox-ul 1 (DEBUG) = tip-ul sabiei
-        CircleShape circle(5); // creeaza un cerc cu raza 20
-        circle.setFillColor(Color::Red); // seteaza culoarea cercului ca transparenta
-        circle.setOutlineColor(Color::Transparent); // seteaza culoarea conturului cercului ca rosu
-        circle.setPosition(Vector2f(handX - cos(angle / 180 * 3.14f + 3.14f/2.0f) * 30, playerY - sin(angle / 180 * 3.14f + 3.14f/2.0f) * 30)); // seteaza pozitia cercului (folosim vector2f)
-        window.draw(circle); // deseneaza cercul
-        // draw hitbox-ul 2 (DEBUG) = tip-ul sabiei
-        circle.setFillColor(Color::Red); // seteaza culoarea cercului ca transparenta
-        circle.setOutlineColor(Color::Transparent); // seteaza culoarea conturului cercului ca rosu
-        circle.setPosition(Vector2f(handX - cos(angle / 180 * 3.14f + 3.14f/2.0f) * 37, playerY - sin(angle / 180 * 3.14f + 3.14f/2.0f) * 37)); // seteaza pozitia cercului (folosim vector2f)
-        window.draw(circle); // deseneaza cercul
+        // // draw hitbox-ul 1 (DEBUG) = tip-ul sabiei
+        // CircleShape circle(5); // creeaza un cerc cu raza 20
+        // circle.setFillColor(Color::Red); // seteaza culoarea cercului ca transparenta
+        // circle.setOutlineColor(Color::Transparent); // seteaza culoarea conturului cercului ca rosu
+        // circle.setPosition(Vector2f(handX - cos(angle / 180 * 3.14f + 3.14f/2.0f) * 30, playerY - sin(angle / 180 * 3.14f + 3.14f/2.0f) * 30)); // seteaza pozitia cercului (folosim vector2f)
+        // window.draw(circle); // deseneaza cercul
+        // // draw hitbox-ul 2 (DEBUG) = tip-ul sabiei
+        // circle.setFillColor(Color::Red); // seteaza culoarea cercului ca transparenta
+        // circle.setOutlineColor(Color::Transparent); // seteaza culoarea conturului cercului ca rosu
+        // circle.setPosition(Vector2f(handX - cos(angle / 180 * 3.14f + 3.14f/2.0f) * 37, playerY - sin(angle / 180 * 3.14f + 3.14f/2.0f) * 37)); // seteaza pozitia cercului (folosim vector2f)
+        // window.draw(circle); // deseneaza cercul
+
+        swordHitbox1 = Vector2f(handX - cos(angle / 180 * 3.14f + 3.14f/2.0f) * 30, playerY - sin(angle / 180 * 3.14f + 3.14f/2.0f) * 30); // seteaza pozitia hitbox-ului sabiei (folosim vector2f)
+        swordHitbox2 = Vector2f(handX - cos(angle / 180 * 3.14f + 3.14f/2.0f) * 37, playerY - sin(angle / 180 * 3.14f + 3.14f/2.0f) * 37); // seteaza pozitia hitbox-ului sabiei (folosim vector2f)
     }
 }
 
@@ -1041,6 +1293,21 @@ void drawText(RenderWindow& window) {
     window.draw(xpText);
 }
 
+// draw all enemies
+void drawEnemies(RenderWindow& window) {
+    // GOBLINS
+    for (EnemyGoblin& enemy : mapGoblins) {
+        enemy.update(window); // actualizeaza inamicul
+        enemy.draw(window); // deseneaza inamicul
+
+        // delete inamic daca este autodistrus
+        if (enemy.isToBeDeleted()) {
+            auto it = remove_if(mapGoblins.begin(), mapGoblins.end(), [](EnemyGoblin& e) { return e.isToBeDeleted(); });
+            mapGoblins.erase(it, mapGoblins.end()); // sterge inamicul din vector
+        }
+    }
+}
+
 void draw(RenderWindow& window) {
     // deseneaza fiecare tile din vectorul mapTiles
     for (Tile& tile : mapTiles) {
@@ -1063,6 +1330,8 @@ void draw(RenderWindow& window) {
             worldItem.obj.draw(window);
         }
     }
+
+    drawEnemies(window); // desenare inamici
 
     drawExpOrbs(window); // desenare orb-uri de exp
     drawCoins(window); // desenare monede
