@@ -33,6 +33,7 @@ using namespace sf;
 const int FPS_LIMIT = 60;           // limita de cadre pe secunda
 const int SPEED_LIMIT = 4;          // 3px/sec
 const bool RELEASE = false;         // flag pentru release (true = release, false = debug)
+unsigned int frameCount = 0;
 
 // -------------------------------------------------------------------- functii utilitare --------------------------------------------------------------------
 // genereaza un numar aleatoriu in intervalul [a, b)
@@ -90,6 +91,7 @@ int playerDamageMultiplier = 1; // muliplicatorul de damage al jucatorului care 
 
 void spawnCoinAt(float x, float y);
 void spawnXPAt(float x, float y);
+void playerTakeDamage(int amount);
 
 // -------------------------------------------------------------------- obiecte --------------------------------------------------------------------
 
@@ -601,7 +603,10 @@ public:
             canAttack = false;
             attackCooldown = attackCooldownStart; // reset cooldown
             if (isMelee) {
-                playerHealth -= damage; // deal damage to player
+                playerTakeDamage(damage); // deal damage to player
+                // knockback player
+                playerVx += -1.5 * cos(angleToPlayer); // knockback in the opposite direction of the player
+                playerVy += -1.5 * sin(angleToPlayer); // knockback in the opposite direction of the player
                 isAttackingAnimation = 30; // set attack animation
                 SoundManager::getInstance().playSound("took_damage"); // Play hit sound for player
             }
@@ -617,6 +622,125 @@ public:
         // y += playerVy; // apply player velocity to y position
     }
 };
+
+class EnemyBaphomet : public Enemy {
+public:
+    EnemyBaphomet(float x, float y)
+        : Enemy(x, y, /*health*/ 0, /*damage*/ 0, /*isMelee*/ true) {
+        // Baphomet is twice as powerful and a bit faster than goblin
+        xpOnDrop         = 20 + rand() % 20;       // 20-39 XP
+        coinsOnDrop      = 14;                     // twice goblin
+        damage           = 12;                     // twice goblin's damage
+        maxHealth        = 60 + rand() % 20;       // 40-59 health
+        health           = maxHealth;
+        attackCooldownStart = attackCooldown = 20; // faster attacks
+        isMelee          = true;
+        speed            = 0.8f;                   // increased speed
+        maxSpeed         = 4.0f;                   // higher top speed
+        animation        = rand() % 100; // random animation start
+        toBeDeleted      = false;                 // not dead
+        canAttack        = true;
+        isAttacking      = false;
+        isAttackingAnimation = 0;
+        enemyWidth       = 50;                     // larger hitbox
+        enemyHeight      = 70;
+        attackRadius     = 60;                     // bigger reach
+        this->x = x;
+        this->y = y;
+        vx = vy = 0;
+    }
+
+    void draw(RenderWindow& window) override {
+        // Load or retrieve Baphomet textures
+        Texture& texW1   = TextureManager::getInstance().find("enemy_baphomet_walk1");
+        Texture& texW2   = TextureManager::getInstance().find("enemy_baphomet_walk2");
+        Texture& texAtk  = TextureManager::getInstance().find("enemy_baphomet_attack");
+        Texture& texW1M  = TextureManager::getInstance().find("enemy_baphomet_walk1_mirror");
+        Texture& texW2M  = TextureManager::getInstance().find("enemy_baphomet_walk2_mirror");
+        Texture& texAtkM = TextureManager::getInstance().find("enemy_baphomet_attack_mirror");
+
+        Sprite sprite(texW1);
+        sprite.setOrigin(Vector2f(texW1.getSize().x / 2.f, texW1.getSize().y / 2.f));
+        sprite.setScale(sf::Vector2f(enemyWidth / (float)texW1.getSize().x,
+                                    enemyHeight / (float)texW1.getSize().y));
+        
+        // choose texture
+        if (isAttackingAnimation > 0) {
+            sprite.setTexture(getX() < 200 ? texAtk : texAtkM);
+        } else if (animation % 50 < 25) {
+            sprite.setTexture(getX() < 200 ? texW1 : texW1M);
+        } else {
+            sprite.setTexture(getX() < 200 ? texW2 : texW2M);
+        }
+        
+        sprite.setPosition(sf::Vector2f(getX(), getY()));
+        window.draw(sprite);
+
+        // advance animation
+        animation = (animation % 100) + 1;
+        if (isAttackingAnimation > 0) --isAttackingAnimation;
+    }
+
+    void update(RenderWindow& window) override {
+        if (toBeDeleted) return;
+
+        // cooldowns
+        if (attackCooldown > 0) --attackCooldown;
+        else canAttack = true;
+
+        // movement: home in
+        float dx = 200 - getX();
+        float dy = playerY - getY();
+        float dist = std::sqrt(dx*dx + dy*dy);
+        if (getX() < 200) vx += speed; else vx -= speed;
+        if (getY() < playerY) vy += speed; else vy -= speed;
+
+        // chaotic vertical jitter when animation hits a specific frame
+        if (animation == 2) {
+            vy += rand_uniform(-3.f, 3.f);
+        }
+
+        // clamp
+        vx = std::clamp(vx, -maxSpeed, maxSpeed);
+        vy = std::clamp(vy, -maxSpeed, maxSpeed);
+
+        // attack logic
+        if (dist < attackRadius && canAttack) {
+            isAttacking = true;
+            canAttack = false;
+            attackCooldown = attackCooldownStart;
+            isAttackingAnimation = 30;
+            playerTakeDamage(damage); // deal damage to player
+            // knockback player
+            playerVx += -3 * cos(atan2(dy, dx)); // knockback in the opposite direction of the player
+            playerVy += -3 * sin(atan2(dy, dx)); // knockback in the opposite direction of the player
+            SoundManager::getInstance().playSound("took_damage");
+        } else {
+            isAttacking = false;
+        }
+
+        // take damage logic from sword
+        Angle towardsPlayerAngle = sf::radians(atan2(dy, dx)); // angle towards player
+        // check if sword hitboxes are inside enemy hitbox
+        if (swordHitbox1.x > getX() - enemyWidth / 2 && swordHitbox1.x < getX() + enemyWidth / 2 &&
+            swordHitbox1.y > getY() - enemyHeight / 2 && swordHitbox1.y < getY() + enemyHeight / 2) {
+            takeDamage(playerDamageMultiplier * 10); // take damage from player
+            vx += -7 * cos(towardsPlayerAngle.asRadians()); // knockback in the opposite direction of the player
+            vy += -7 * sin(towardsPlayerAngle.asRadians()); // knockback in the opposite direction of the player
+        }
+        if (swordHitbox2.x > getX() - enemyWidth / 2 && swordHitbox2.x < getX() + enemyWidth / 2 &&
+            swordHitbox2.y > getY() - enemyHeight / 2 && swordHitbox2.y < getY() + enemyHeight / 2) {
+            takeDamage(playerDamageMultiplier * 10); // take damage from player
+            vx += -7 * cos(towardsPlayerAngle.asRadians()); // knockback in the opposite direction of the player
+            vy += -7 * sin(towardsPlayerAngle.asRadians()); // knockback in the opposite direction of the player
+        }
+
+        // apply movement
+        x += vx * 0.8f + playerVx;
+        y += vy * 0.8f;
+    }
+};
+
 
 // clasa de bani
 class Coin {
@@ -805,6 +929,7 @@ vector<ExpOrb> mapExpOrbs; // container pentru orb-urile de exp din harta
 vector<ItemObject> worldItems;
 // inamici & entitati
 vector<EnemyGoblin> mapGoblins; // container pentru inamicii de tip goblin
+vector<EnemyBaphomet> mapBaphomets; // container pentru inamicii de tip Baphomet
 
 // ---------------------------------------------------------- functiile folosite de obiecte --------------------------------------------------------------------
 
@@ -814,6 +939,20 @@ void spawnCoinAt(float x, float y) {
 
 void spawnXPAt(float x, float y) {
     mapExpOrbs.push_back(ExpOrb(x, y)); // adauga un orb de exp la coordonatele x, y
+}
+
+void playerTakeDamage(int damage) {
+    // daca are scut, scade din scut
+    // daca nu are scut, scade din viata
+    if (playerArmor > 0) {
+        playerArmor -= damage; // scade din scut
+        if (playerArmor < 0) {
+            playerHealth += playerArmor; // scade din viata
+            playerArmor = 0; // seteaza scutul la 0
+        }
+    } else {
+        playerHealth -= damage; // scade din viata
+    }
 }
 
 // -------------------------------------------------------------------- controale --------------------------------------------------------------------
@@ -855,9 +994,15 @@ void controls() {
     // }
 
     // debug: X = spawns goblin at 500, 300
-    if (keysPressed[static_cast<int>(Keyboard::Key::X)]) {  // daca tasta X este apasata
+    if (keysPressed[static_cast<int>(Keyboard::Key::X)] && frameCount % 10 == 0) {  // daca tasta X este apasata si frameCount % 10 == 0
         mapGoblins.push_back(EnemyGoblin(500, 300, 100, 10, true)); // adauga un goblin la coordonatele 500, 300
         cout << "DEBUG: spawned goblin at 500, 300" << endl; // afiseaza mesaj de spawn
+    }
+
+    // debug: B = spawns baphomet at 600, 300
+    if (keysPressed[static_cast<int>(Keyboard::Key::B)] && frameCount % 10 == 0) {  // daca tasta B este apasata si frameCount % 10 == 0
+        mapBaphomets.push_back(EnemyBaphomet(600, 300)); // adauga un baphomet la coordonatele 600, 300
+        cout << "DEBUG: spawned baphomet at 600, 300" << endl; // afiseaza mesaj de spawn
     }
 
     // cout << "dashing data: " << "dashing: " << dashing << " canDash: " << canDash << " dashDuration: " << dashDuration << " dashCooldown: " << dashCooldown << endl;
@@ -865,6 +1010,7 @@ void controls() {
 
 // -------------------------------------------------------------------- initializare --------------------------------------------------------------------
 void init() {
+    frameCount = 0; // initializeaza frameCount
     // map textures
     TextureManager::getInstance().justLoad("dirt");
     TextureManager::getInstance().justLoad("stone");
@@ -898,6 +1044,13 @@ void init() {
     TextureManager::getInstance().justLoad("enemy_goblin_walk1_mirror");
     TextureManager::getInstance().justLoad("enemy_goblin_walk2_mirror");
     TextureManager::getInstance().justLoad("enemy_goblin_attack_mirror");
+    // enemy baphomet
+    TextureManager::getInstance().justLoad("enemy_baphomet_walk1");
+    TextureManager::getInstance().justLoad("enemy_baphomet_walk2");
+    TextureManager::getInstance().justLoad("enemy_baphomet_attack");
+    TextureManager::getInstance().justLoad("enemy_baphomet_walk1_mirror");
+    TextureManager::getInstance().justLoad("enemy_baphomet_walk2_mirror");
+    TextureManager::getInstance().justLoad("enemy_baphomet_attack_mirror");
 
     srand(time(NULL));  // initializeaza generatorul de numere aleatorii
     // adauga obiecte in containerul mapObjects
@@ -1306,6 +1459,18 @@ void drawEnemies(RenderWindow& window) {
             mapGoblins.erase(it, mapGoblins.end()); // sterge inamicul din vector
         }
     }
+
+    // BAPHOMETS
+    for (EnemyBaphomet& enemy : mapBaphomets) {
+        enemy.update(window); // actualizeaza inamicul
+        enemy.draw(window); // deseneaza inamicul
+
+        // delete inamic daca este autodistrus
+        if (enemy.isToBeDeleted()) {
+            auto it = remove_if(mapBaphomets.begin(), mapBaphomets.end(), [](EnemyBaphomet& e) { return e.isToBeDeleted(); });
+            mapBaphomets.erase(it, mapBaphomets.end()); // sterge inamicul din vector
+        }
+    }
 }
 
 void draw(RenderWindow& window) {
@@ -1403,6 +1568,8 @@ int main() {
         update(window);       // actualizeaza starea jocului
         draw(window);       // deseneaza totul in fereastra
         window.display();   // afiseaza continutul desenat pe ecran
+
+        frameCount++; // creste numarul de frame-uri
     }
     return 0;  // intoarce 0 la terminarea executiei
 }
