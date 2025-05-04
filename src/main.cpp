@@ -280,7 +280,7 @@ public:
             Texture& texture = TextureManager::getInstance().find("dirt");
             Sprite sprite(texture);
             sprite.setPosition(Vector2f(x, y)); // seteaza pozitia (folosim vector2f)
-            sprite.setScale(Vector2f(width / texture.getSize().x, height / texture.getSize().y)); // seteaza scalarea pentru a se potrivi dimensiunilor
+            sprite.setScale(Vector2f(40.0f / texture.getSize().x, 40.0f / texture.getSize().y));
             window.draw(sprite); // deseneaza sprite-ul
         }
 
@@ -289,7 +289,7 @@ public:
             Texture& texture = TextureManager::getInstance().find("stone");
             Sprite sprite(texture);
             sprite.setPosition(Vector2f(x, y)); // seteaza pozitia (folosim vector2f)
-            sprite.setScale(Vector2f(width / texture.getSize().x, height / texture.getSize().y)); // seteaza scalarea pentru a se potrivi dimensiunilor
+            sprite.setScale(Vector2f(40.0f / texture.getSize().x, 40.0f / texture.getSize().y));
             window.draw(sprite); // deseneaza sprite-ul
         }
 
@@ -298,7 +298,7 @@ public:
             Texture& texture = TextureManager::getInstance().find("grass1");
             Sprite sprite(texture);
             sprite.setPosition(Vector2f(x, y)); // seteaza pozitia (folosim vector2f)
-            sprite.setScale(Vector2f(width / texture.getSize().x, height / texture.getSize().y)); // seteaza scalarea pentru a se potrivi dimensiunilor
+            sprite.setScale(Vector2f(40.0f / texture.getSize().x, 40.0f / texture.getSize().y));
             window.draw(sprite); // deseneaza sprite-ul
         }
 
@@ -307,7 +307,7 @@ public:
             Texture& texture = TextureManager::getInstance().find("grass2");
             Sprite sprite(texture);
             sprite.setPosition(Vector2f(x, y)); // seteaza pozitia (folosim vector2f)
-            sprite.setScale(Vector2f(width / texture.getSize().x, height / texture.getSize().y)); // seteaza scalarea pentru a se potrivi dimensiunilor
+            sprite.setScale(Vector2f(40.0f / texture.getSize().x, 40.0f / texture.getSize().y));
             window.draw(sprite); // deseneaza sprite-ul
         }
 
@@ -316,7 +316,7 @@ public:
             Texture& texture = TextureManager::getInstance().find("grass3");
             Sprite sprite(texture);
             sprite.setPosition(Vector2f(x, y)); // seteaza pozitia (folosim vector2f)
-            sprite.setScale(Vector2f(width / texture.getSize().x, height / texture.getSize().y)); // seteaza scalarea pentru a se potrivi dimensiunilor
+            sprite.setScale(Vector2f(40.0f / texture.getSize().x, 40.0f / texture.getSize().y));
             window.draw(sprite); // deseneaza sprite-ul
         }
     }
@@ -1075,7 +1075,7 @@ void init() {
     // 80x60
     for (int i = 0; i < 84/4; i++) {
         for (int j = 0; j < 64/4; j++) {
-            mapTiles.push_back(Tile(i * 40 - 40, j * 40 - 40, 39, 39, Color::Black));
+            mapTiles.push_back(Tile(i * 40 - 40, j * 40 - 40, 40, 40, Color::Black));
 
             auto random = rand_uniform(0, 100);
             if (random < 8) { // 8% chance
