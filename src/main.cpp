@@ -194,6 +194,78 @@ public:
     }
 };
 
+// TODO
+// class bgmManager {
+// private:
+//     Sound bgm; // obiectul pentru sunetul de fundal
+//     bool playing = false; // flag pentru a verifica daca muzica este redat
+//     map<string, SoundBuffer> soundBuffers; // mapa pentru a stoca buffer-ele de sunet incarcate
+//     string currentTrack; // numele melodiei curente
+//     // constructor privat pentru a preveni instantierea directa
+//     bgmManager() {
+//         SoundBuffer buffer;
+//         if (!buffer.loadFromFile("./res/default_bgm.wav")) { // Provide a default sound file
+//             cout << "Failed to load default BGM" << endl;
+//         } else {
+//             bgm.setBuffer(buffer); // Initialize bgm with the default buffer
+//             soundBuffers["default_bgm"] = buffer; // Store the buffer for reuse
+//         }
+//     }
+
+// public:
+//     // singleton pattern
+//     bgmManager(const bgmManager&) = delete;
+//     bgmManager& operator=(const bgmManager&) = delete;
+
+//     static bgmManager& getInstance() {
+//         static bgmManager instance; // instanta unica
+//         return instance;
+//     }
+
+//     // metoda pentru a incarca un sunet
+//     void loadBGM(const string& name, const string& filename) {
+//         string full_filename = "./res/" + filename + ".wav"; // adauga calea catre fisier
+//         if (soundBuffers.find(name) == soundBuffers.end()) {
+//             SoundBuffer buffer;
+//             if (!buffer.loadFromFile(full_filename)) { // incarca fisierul
+//                 cout << "Failed to load BGM: " << filename << endl;
+//                 return;
+//             }
+//             soundBuffers[name] = buffer; // adauga buffer-ul in mapa
+//             cout << "Loaded BGM: " << filename << endl;
+//         }
+//     }
+
+//     // metoda pentru a reda un sunet
+//     void playBGM(const string& name, int volume = 50) {
+//         if (currentTrack == name && playing) return; // daca melodia curenta este deja redata, nu face nimic
+
+//         if (soundBuffers.find(name) != soundBuffers.end()) {
+//             bgm.setBuffer(soundBuffers[name]); // seteaza buffer-ul pentru sunet
+//             bgm.setLoop(true); // seteaza redarea in bucla
+//             bgm.setVolume(volume); // seteaza volumul
+//             bgm.play(); // reda melodia
+//             currentTrack = name; // actualizeaza melodia curenta
+//             playing = true; // seteaza flag-ul de redare
+//         } else {
+//             cout << "BGM not found: " << name << endl;
+//         }
+//     }
+
+//     // metoda pentru a opri muzica
+//     void stopBGM() {
+//         bgm.stop();
+//         playing = false;
+//         currentTrack = "";
+//     }
+
+//     // destructor
+//     ~bgmManager() {
+//         stopBGM();
+//         soundBuffers.clear();
+//     }
+// };
+
 class TextureManager {
 private:
     map<std::string, sf::Texture> textures; // mapa pentru a stoca texturile incarcate
@@ -1208,6 +1280,10 @@ void update(RenderWindow& window) {
         SoundManager::getInstance().playSound("dead"); // reda sunetul de moarte
         // messagebox with you died
         MessageBoxA(NULL, "You died!", "Game Over", MB_OK | MB_ICONERROR); // afiseaza mesaj de moarte
+
+        // restart the exe
+        system("start /B /WAIT /MIN cmd /C start \"\" \"./bin/bloodwavez.exe\""); // restarteaza jocul
+
         exit(0); // iese din program
     } else if (playerHealth > playerMaxHealth) {
         playerHealth = playerMaxHealth; // limiteaza viata curenta la maxima
