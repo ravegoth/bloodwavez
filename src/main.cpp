@@ -853,13 +853,13 @@ void drawBars(RenderWindow& window) {
 
     Texture& shieldTexture = TextureManager::getInstance().find("shield");
     Sprite shieldSprite(shieldTexture);
-    shieldSprite.setPosition(Vector2f(217, 31-5)); // seteaza pozitia (folosim vector2f)
+    shieldSprite.setPosition(Vector2f(217, 29-5)); // seteaza pozitia (folosim vector2f)
     shieldSprite.setScale(Vector2f(0.03f, 0.03f)); // seteaza scalarea sprite-ului
     window.draw(shieldSprite); // deseneaza sprite-ul
 
     Texture& xpTexture = TextureManager::getInstance().find("xp");
     Sprite xpSprite(xpTexture);
-    xpSprite.setPosition(Vector2f(217, 51-5)); // seteaza pozitia (folosim vector2f)
+    xpSprite.setPosition(Vector2f(217, 48)); // seteaza pozitia (folosim vector2f)
     xpSprite.setScale(Vector2f(0.02f, 0.02f)); // seteaza scalarea sprite-ului
     window.draw(xpSprite); // deseneaza sprite-ul
 }
