@@ -365,30 +365,33 @@ public:
             window.draw(sprite); // deseneaza sprite-ul
         }
 
+        // factorul de scaling folosit este 1.25 deoarece stim ca fiecare tile esete 32/32 dar noi
+        // avem celule de 40/40 in matrice deci 32*1.25=40
+
         // if type == "grass1", draw ./res/grass1.png
         if (type == "grass1") {
-            Texture& texture = TextureManager::getInstance().find("grass1");
-            Sprite sprite(texture);
+            Texture& texture = TextureManager::getInstance().find("Tileset");
+            Sprite sprite(texture,IntRect({0,0},{32,32}));
             sprite.setPosition(Vector2f(x, y)); // seteaza pozitia (folosim vector2f)
-            sprite.setScale(Vector2f(40.0f / texture.getSize().x, 40.0f / texture.getSize().y));
+            sprite.setScale(Vector2f(1.25, 1.25));
             window.draw(sprite); // deseneaza sprite-ul
         }
 
         // if type == "grass2", draw ./res/grass2.png
         if (type == "grass2") {
-            Texture& texture = TextureManager::getInstance().find("grass2");
-            Sprite sprite(texture);
+            Texture& texture = TextureManager::getInstance().find("Tileset");
+            Sprite sprite(texture,IntRect({32,0},{32,32}));
             sprite.setPosition(Vector2f(x, y)); // seteaza pozitia (folosim vector2f)
-            sprite.setScale(Vector2f(40.0f / texture.getSize().x, 40.0f / texture.getSize().y));
+            sprite.setScale(Vector2f(1.25, 1.25));
             window.draw(sprite); // deseneaza sprite-ul
         }
 
         // if type == "grass3", draw ./res/grass3.png
         if (type == "grass3") {
-            Texture& texture = TextureManager::getInstance().find("grass3");
-            Sprite sprite(texture);
+            Texture& texture = TextureManager::getInstance().find("Tileset");
+            Sprite sprite(texture,IntRect({0,32},{32,32}));
             sprite.setPosition(Vector2f(x, y)); // seteaza pozitia (folosim vector2f)
-            sprite.setScale(Vector2f(40.0f / texture.getSize().x, 40.0f / texture.getSize().y));
+            sprite.setScale(Vector2f(1.25, 1.25));
             window.draw(sprite); // deseneaza sprite-ul
         }
     }
@@ -547,49 +550,48 @@ public:
         // walk 1 mirrored (animation % 50 < 25) = enemy_goblin_walk1_mirror.png
         // walk 2 mirrored (animation % 50 >= 25) = enemy_goblin_walk2_mirror.png
         // attack mirrored (when isAttacking) = enemy_goblin_attack_mirror.png
-        Texture& textureWalk1 = TextureManager::getInstance().find("enemy_goblin_walk1");
-        Texture& textureWalk2 = TextureManager::getInstance().find("enemy_goblin_walk2");
-        Texture& textureAttack = TextureManager::getInstance().find("enemy_goblin_attack");
-        Texture& textureWalk1Mirror = TextureManager::getInstance().find("enemy_goblin_walk1_mirror");
-        Texture& textureWalk2Mirror = TextureManager::getInstance().find("enemy_goblin_walk2_mirror");
-        Texture& textureAttackMirror = TextureManager::getInstance().find("enemy_goblin_attack_mirror");
 
-        Sprite sprite(textureWalk1); // Initialize with a valid texture
+        //individual size 82/128
+
+        Texture& mobTexture = TextureManager::getInstance().find("Goblinset");
+
+        Sprite sprite(mobTexture,IntRect({82*2,82},{82,128})); // Initialize with a valid texture
 
         // draw (centered) at x, y
-        sprite.setPosition(Vector2f(getX() - textureWalk1.getSize().x / 2, getY() - textureWalk1.getSize().y / 2)); // center the sprite
+        sprite.setPosition(Vector2f(82/2, 128/2)); // center the sprite
         // auto scale the sprite to 30x50 px
-        sprite.setScale(Vector2f(enemyWidth / textureWalk1.getSize().x, enemyHeight / textureWalk1.getSize().y)); // scale the sprite
+        sprite.setScale(Vector2f(0.365, 0.390)); // scale the sprite
         
         // draw
         if (isAttackingAnimation > 0) {
             // draw attack animation
             if (getX() < 200) {
-                sprite.setTexture(textureAttack); // set texture to attack
+                sprite.setTextureRect(IntRect({0,0},{82,128})); // set texture to attack
             } else {
-                sprite.setTexture(textureAttackMirror); // set texture to attack mirrored
+                sprite.setTextureRect(IntRect({82,0},{82,128}));  // set texture to attack mirrored
             }
         } else {
             // draw walk animation
             if (animation % 50 < 25) {
                 if (getX() < 200) {
-                    sprite.setTexture(textureWalk1); // set texture to walk1
+                    sprite.setTextureRect(IntRect({82*2,0},{82,128})); // set texture to walk1
                 } else {
-                    sprite.setTexture(textureWalk1Mirror); // set texture to walk1 mirrored
+                    sprite.setTextureRect(IntRect({0,128},{82,128})); // set texture to walk1 mirrored
                 }
             } else {
                 if (getX() < 200) {
-                    sprite.setTexture(textureWalk2); // set texture to walk2
+                    sprite.setTextureRect(IntRect({82,128},{82,128})); // set texture to walk2
                 } else {
-                    sprite.setTexture(textureWalk2Mirror); // set texture to walk2 mirrored
+                    sprite.setTextureRect(IntRect({82*2,128},{82,128})); // set texture to walk2 mirrored
                 }
             }
         }
 
-        // set the scale to 30x50 px
-        sprite.setScale(Vector2f(30.0f / textureWalk1.getSize().x, 50.0f / textureWalk1.getSize().y)); // scale the sprite
+        // set the scale to 30x50 px (can increase for bigger enemies)
+        // scale set to equal 30x50 from 82x128
+        sprite.setScale(Vector2f(0.365, 0.390)); // scale the sprite
         // set the position to x, y
-        sprite.setPosition(Vector2f(getX() - 30.0f / 2, getY() - 50.0f / 2)); // center the sprite 
+        sprite.setPosition(Vector2f(getX() - 30.0f / 2, getY() - 50.0f / 2)); // center the sprite
         // draw the sprite  
         window.draw(sprite); // draw the sprite
         // update animation
@@ -724,31 +726,50 @@ public:
 
     void draw(RenderWindow& window) override {
         // Load or retrieve Baphomet textures
-        Texture& texW1   = TextureManager::getInstance().find("enemy_baphomet_walk1");
-        Texture& texW2   = TextureManager::getInstance().find("enemy_baphomet_walk2");
-        Texture& texAtk  = TextureManager::getInstance().find("enemy_baphomet_attack");
-        Texture& texW1M  = TextureManager::getInstance().find("enemy_baphomet_walk1_mirror");
-        Texture& texW2M  = TextureManager::getInstance().find("enemy_baphomet_walk2_mirror");
-        Texture& texAtkM = TextureManager::getInstance().find("enemy_baphomet_attack_mirror");
+        //individual size 82/128
 
-        Sprite sprite(texW1);
-        sprite.setOrigin(Vector2f(texW1.getSize().x / 2.f, texW1.getSize().y / 2.f));
-        sprite.setScale(sf::Vector2f(enemyWidth / (float)texW1.getSize().x,
-                                    enemyHeight / (float)texW1.getSize().y));
-        
-        // choose texture
+        Texture& mobTexture = TextureManager::getInstance().find("Baphometset");
+
+        Sprite sprite(mobTexture,IntRect({82*2,82},{82,128})); // Initialize with a valid texture
+
+        // draw (centered) at x, y
+        sprite.setPosition(Vector2f(82/2, 128/2)); // center the sprite
+        // auto scale the sprite to 30x50 px
+        sprite.setScale(Vector2f(0.365, 0.390)); // scale the sprite
+
+        // draw
         if (isAttackingAnimation > 0) {
-            sprite.setTexture(getX() < 200 ? texAtk : texAtkM);
-        } else if (animation % 50 < 25) {
-            sprite.setTexture(getX() < 200 ? texW1 : texW1M);
+            // draw attack animation
+            if (getX() < 200) {
+                sprite.setTextureRect(IntRect({0,0},{82,128})); // set texture to attack
+            } else {
+                sprite.setTextureRect(IntRect({82,0},{82,128}));  // set texture to attack mirrored
+            }
         } else {
-            sprite.setTexture(getX() < 200 ? texW2 : texW2M);
+            // draw walk animation
+            if (animation % 50 < 25) {
+                if (getX() < 200) {
+                    sprite.setTextureRect(IntRect({82*2,0},{82,128})); // set texture to walk1
+                } else {
+                    sprite.setTextureRect(IntRect({0,128},{82,128})); // set texture to walk1 mirrored
+                }
+            } else {
+                if (getX() < 200) {
+                    sprite.setTextureRect(IntRect({82,128},{82,128})); // set texture to walk2
+                } else {
+                    sprite.setTextureRect(IntRect({82*2,128},{82,128})); // set texture to walk2 mirrored
+                }
+            }
         }
-        
-        sprite.setPosition(sf::Vector2f(getX(), getY()));
-        window.draw(sprite);
 
-        // advance animation
+        // set the scale to 50x70 px (can increase for bigger enemies)
+        // scale set to equal 50x70 from 82x128
+        sprite.setScale(Vector2f(0.609, 0.546)); // scale the sprite
+        // set the position to x, y
+        sprite.setPosition(Vector2f(getX() - 30.0f / 2, getY() - 50.0f / 2)); // center the sprite
+        // draw the sprite
+        window.draw(sprite); // draw the sprite
+        // update animation
         animation = (animation % 100) + 1;
         if (isAttackingAnimation > 0) --isAttackingAnimation;
     }
@@ -884,13 +905,19 @@ public:
     // metoda pentru desenarea monedei
     void draw(RenderWindow& window) {
         // selecteaza textura in functie de animatie
-        Texture& texture = (animation <= 50) 
-            ? TextureManager::getInstance().find("coin1") 
-            : TextureManager::getInstance().find("coin2");
+        //Texture& texture = (animation <= 50)
+        //    ? TextureManager::getInstance().find("coin1")
+        //    : TextureManager::getInstance().find("coin2");
+
+        Texture& texture = TextureManager::getInstance().find("Coinset");
 
         Sprite sprite(texture);
+        if (animation<=50) sprite.setTextureRect(IntRect({0,0},{32,32}));
+        else sprite.setTextureRect(IntRect({32,0},{32,32}));
+
         sprite.setPosition(Vector2f(x, y)); // seteaza pozitia sprite-ului
-        sprite.setScale(Vector2f(10.0f / texture.getSize().x, 10.0f / texture.getSize().y)); // seteaza scalarea sprite-ului
+        //schimba factorul de scaling pentru textura mai mare sau mica
+        sprite.setScale(Vector2f(0.35, 0.35)); // seteaza scalarea sprite-ului
         window.draw(sprite); // deseneaza sprite-ul
 
         // actualizeaza animatia
@@ -974,13 +1001,14 @@ public:
     // metoda pentru desenarea orb-ului
     void draw(RenderWindow& window) {
         // selecteaza textura in functie de animatie
-        Texture& texture = (animation <= 50) 
-            ? TextureManager::getInstance().find("exp1") 
-            : TextureManager::getInstance().find("exp2");
+        Texture& texture = TextureManager::getInstance().find("Expset");
 
         Sprite sprite(texture);
+        if (animation<=50) sprite.setTextureRect(IntRect({0,0},{32,32}));
+        else sprite.setTextureRect(IntRect({32,0},{32,32}));
+
         sprite.setPosition(Vector2f(x, y)); // seteaza pozitia sprite-ului
-        sprite.setScale(Vector2f(10.0f / texture.getSize().x, 10.0f / texture.getSize().y)); // seteaza scalarea sprite-ului
+        sprite.setScale(Vector2f(0.25, 0.25)); // seteaza scalarea sprite-ului
         window.draw(sprite); // deseneaza sprite-ul
 
         // actualizeaza animatia
@@ -1084,45 +1112,23 @@ void controls() {
 void init() {
     frameCount = 0; // initializeaza frameCount
     // map textures
-    TextureManager::getInstance().justLoad("dirt");
-    TextureManager::getInstance().justLoad("stone");
-    TextureManager::getInstance().justLoad("grass1");
-    TextureManager::getInstance().justLoad("grass2");
-    TextureManager::getInstance().justLoad("grass3");
+    TextureManager::getInstance().justLoad("Tileset");
+    //TextureManager::getInstance().justLoad("dirt");
+    //TextureManager::getInstance().justLoad("stone");
     // player textures
-    TextureManager::getInstance().justLoad("player_still");
-    TextureManager::getInstance().justLoad("player_move_1");
-    TextureManager::getInstance().justLoad("player_move_2");
-    TextureManager::getInstance().justLoad("player_move_1_mirror");
-    TextureManager::getInstance().justLoad("player_move_2_mirror");
-    TextureManager::getInstance().justLoad("player_dash");
-    TextureManager::getInstance().justLoad("player_dash_mirror");
+    TextureManager::getInstance().justLoad("Playerset");
     // weapon textures
     TextureManager::getInstance().justLoad("weapon_basic_sword");
     // coin textures
-    TextureManager::getInstance().justLoad("coin1");
-    TextureManager::getInstance().justLoad("coin2");
+    TextureManager::getInstance().justLoad("Coinset");
     // exp textures
-    TextureManager::getInstance().justLoad("exp1");
-    TextureManager::getInstance().justLoad("exp2");
+    TextureManager::getInstance().justLoad("Expset");
     // icons
-    TextureManager::getInstance().justLoad("xp");
-    TextureManager::getInstance().justLoad("shield");
-    TextureManager::getInstance().justLoad("heart");
+    TextureManager::getInstance().justLoad("Miscset");
     // enemy gobllin
-    TextureManager::getInstance().justLoad("enemy_goblin_walk1");
-    TextureManager::getInstance().justLoad("enemy_goblin_walk2");
-    TextureManager::getInstance().justLoad("enemy_goblin_attack");
-    TextureManager::getInstance().justLoad("enemy_goblin_walk1_mirror");
-    TextureManager::getInstance().justLoad("enemy_goblin_walk2_mirror");
-    TextureManager::getInstance().justLoad("enemy_goblin_attack_mirror");
+    TextureManager::getInstance().justLoad("Goblinset");
     // enemy baphomet
-    TextureManager::getInstance().justLoad("enemy_baphomet_walk1");
-    TextureManager::getInstance().justLoad("enemy_baphomet_walk2");
-    TextureManager::getInstance().justLoad("enemy_baphomet_attack");
-    TextureManager::getInstance().justLoad("enemy_baphomet_walk1_mirror");
-    TextureManager::getInstance().justLoad("enemy_baphomet_walk2_mirror");
-    TextureManager::getInstance().justLoad("enemy_baphomet_attack_mirror");
+    TextureManager::getInstance().justLoad("Baphometset");
 
     srand(time(NULL));  // initializeaza generatorul de numere aleatorii
     // adauga obiecte in containerul mapObjects
@@ -1297,35 +1303,38 @@ void update(RenderWindow& window) {
 }
 
 // -------------------------------------------------------------------- desenare --------------------------------------------------------------------
-void drawPlayerAt(RenderWindow& window, float x, float y, float speed = 0, float scale = 0.1f) {
+void drawPlayerAt(RenderWindow& window, float x, float y, float speed = 0, float scale = 0.45f) {
     // deseneaza jucatorul in functie de viteza si pozitie
-    Texture* texture;
+    Texture& texture = TextureManager::getInstance().find("Playerset");;
+    Sprite sprite(texture);
+
+    //individual texture size 90/128
+
     if (notMoving) {
-        texture = &TextureManager::getInstance().find("player_still");
+        sprite.setTextureRect(IntRect({0,128*2},{90,128}));
     } else if (playerVx < 0 && moveAnimationCounter % 40 < 20) {
-        texture = &TextureManager::getInstance().find("player_move_2");
+        sprite.setTextureRect(IntRect({90,128},{90,128}));
         moveAnimationCounter ++;
     } else if (playerVx < 0 && moveAnimationCounter % 40 >= 20) {
-        texture = &TextureManager::getInstance().find("player_move_1");
+        sprite.setTextureRect(IntRect({90*2,0},{90,128}));
         moveAnimationCounter ++;
     } else if (playerVx > 0 && moveAnimationCounter % 40 < 20) {
-        texture = &TextureManager::getInstance().find("player_move_2_mirror");
+        sprite.setTextureRect(IntRect({90*2,128},{90,128}));
         moveAnimationCounter ++;
     } else if (playerVx > 0 && moveAnimationCounter % 40 >= 20) {
-        texture = &TextureManager::getInstance().find("player_move_1_mirror");
+        sprite.setTextureRect(IntRect({0,128},{90,128}));
         moveAnimationCounter ++;
     } else {
-        texture = &TextureManager::getInstance().find("player_still");
+        sprite.setTextureRect(IntRect({0,128*2},{90,128}));
     }
 
     if (dashing && playerVx < 0) {
-        texture = &TextureManager::getInstance().find("player_dash");
+        sprite.setTextureRect(IntRect({0,0},{90,128}));
     } else if (dashing && playerVx > 0) {
-        texture = &TextureManager::getInstance().find("player_dash_mirror");
+        sprite.setTextureRect(IntRect({90,0},{90,128}));
     }
 
-    Sprite sprite(*texture);
-    sprite.setOrigin(Vector2f(texture->getSize().x / 2, texture->getSize().y / 2)); // seteaza originea sprite-ului la mijlocul lui
+    sprite.setOrigin(Vector2f(45, 64)); // seteaza originea sprite-ului la mijlocul lui
     sprite.setScale(Vector2f(scale, scale)); // seteaza scalarea sprite-ului
     sprite.setPosition(Vector2f(x, y)); // seteaza pozitia sprite-ului (folosim vector2f)
     window.draw(sprite); // deseneaza sprite-ul
@@ -1441,24 +1450,29 @@ void drawBars(RenderWindow& window) {
     window.draw(armorBarStroke); // deseneaza dreptunghiul
     window.draw(xpBarStroke); // deseneaza dreptunghiul
 
-    // draw icons next to the bars
-    Texture& heartTexture = TextureManager::getInstance().find("heart");
-    Sprite heartSprite(heartTexture);
-    heartSprite.setPosition(Vector2f(217, 11-5)); // seteaza pozitia (folosim vector2f)
-    heartSprite.setScale(Vector2f(0.03f, 0.03f)); // seteaza scalarea sprite-ului
-    window.draw(heartSprite); // deseneaza sprite-ul
+    // get icon set
+    // each icon size is 32x32
+    Texture& texture = TextureManager::getInstance().find("Miscset");
 
-    Texture& shieldTexture = TextureManager::getInstance().find("shield");
-    Sprite shieldSprite(shieldTexture);
-    shieldSprite.setPosition(Vector2f(217, 29-5)); // seteaza pozitia (folosim vector2f)
-    shieldSprite.setScale(Vector2f(0.03f, 0.03f)); // seteaza scalarea sprite-ului
-    window.draw(shieldSprite); // deseneaza sprite-ul
+    Sprite sprite(texture);
 
-    Texture& xpTexture = TextureManager::getInstance().find("xp");
-    Sprite xpSprite(xpTexture);
-    xpSprite.setPosition(Vector2f(217, 48)); // seteaza pozitia (folosim vector2f)
-    xpSprite.setScale(Vector2f(0.02f, 0.02f)); // seteaza scalarea sprite-ului
-    window.draw(xpSprite); // deseneaza sprite-ul
+    //change for smaller or bigger icons
+    float scale = 0.6f;
+
+    sprite.setTextureRect(IntRect({0,0},{32,32}));
+    sprite.setPosition(Vector2f(217, 11-5)); // seteaza pozitia (folosim vector2f)
+    sprite.setScale(Vector2f(scale, scale)); // seteaza scalarea sprite-ului
+    window.draw(sprite); // deseneaza sprite-ul
+
+    sprite.setTextureRect(IntRect({32,0},{32,32}));
+    sprite.setPosition(Vector2f(217, 29-5)); // seteaza pozitia (folosim vector2f)
+    sprite.setScale(Vector2f(scale, scale)); // seteaza scalarea sprite-ului
+    window.draw(sprite); // deseneaza sprite-ul
+
+    sprite.setTextureRect(IntRect({0,32},{32,32}));
+    sprite.setPosition(Vector2f(217, 48)); // seteaza pozitia (folosim vector2f)
+    sprite.setScale(Vector2f(scale, scale)); // seteaza scalarea sprite-ului
+    window.draw(sprite); // deseneaza sprite-ul
 }
 
 void drawText(RenderWindow& window) {
