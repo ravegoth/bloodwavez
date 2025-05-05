@@ -4,3 +4,4 @@ CMakeLists.txt
 .idea/bloodwavez.iml
 /.idea
 *.exe
+/libs
