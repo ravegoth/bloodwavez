@@ -53,6 +53,7 @@ bool leftClick = false;           // flag: true daca butonul stang a fost apasat
 bool rightClick = false;          // flag: true daca butonul drept a fost apasat
 float mouseX = 0, mouseY = 0;       // coordonatele curente ale mouse-ului
 bool keysPressed[256] = { false }; // starea tastelor
+bool keysReleased[256] = { false };
 
 int playerX = 0;
 int playerY = 300; // pozitia initiala a jucatorului
@@ -79,12 +80,13 @@ int balance = 0; // numarul de $$$
 int xp = 0; // xp-ul jucatorului
 int level = 1; // starting level
 int levelXP = 100; // xp-ul necesar pentru a urca la nivelul urmator
+int skillPoints = 0;
 
 int playerHealth = 100; // viata jucatorului
 int playerMaxHealth = 100; // viata maxima a jucatorului
 int playerArmor = 0; // armura jucatorului
 int playerMaxArmor = 100; // armura maxima a jucatorului
-int playerDamageMultiplier = 1; // muliplicatorul de damage al jucatorului care va fi inmultit cu damage-ul armei
+float playerDamageMultiplier = 1; // muliplicatorul de damage al jucatorului care va fi inmultit cu damage-ul armei
 
 
 // ---------------------------------------------------- functii folosite de obiecte (forward decl) -----------------------------------------------------------
@@ -159,7 +161,7 @@ public:
     }
 
     // metoda pentru a reda un sunet
-    void playSound(const string& name, int volume = 100) {
+    void playSound(const string& name, int volume = 30) {
         if (sounds.find(name) != sounds.end()) {
             // seteaza volumul la 100% (sau orice altceva vrei)
             sounds[name]->setVolume(volume); // seteaza volumul
@@ -478,7 +480,7 @@ public:
     void setToBeDeleted(bool deleted) { this->toBeDeleted = deleted; }
 
     // Methods
-    void takeDamage(int amount) {
+    void takeDamage(float amount) {
         if (toBeDeleted) return; // Already dead
 
         health -= amount;
@@ -1258,6 +1260,7 @@ void update(RenderWindow& window) {
     if (xp >= levelXP) {
         level += 1; // creste nivelul jucatorului
         xp = 0; // resetare xp
+        skillPoints++;
         levelXP += levelXP / 9;
 
         // creste armura maxima
@@ -1300,6 +1303,8 @@ void update(RenderWindow& window) {
     if (playerArmor < 0) {
         playerArmor = 0; // limiteaza armura curenta la 0
     }
+
+    //cout<<mouseX<<" "<<mouseY<<endl;
 }
 
 // -------------------------------------------------------------------- desenare --------------------------------------------------------------------
@@ -1563,6 +1568,134 @@ void drawEnemies(RenderWindow& window) {
     }
 }
 
+float totalDamageIncrease=0;
+
+vector<pair<bool,pair<int,String>>> func {
+                    {false,{10,"% increased damage"}},
+                    {false,{10,"% increased health"}},
+                    {false,{10,"% chance to deal double damage"}},
+                    {false,{10,"% of life added as flat damage to your weapon"}},
+                    {false,{5,"% chance to not take damage from hits" }},
+                    {false,{20,"% increased damage for 3s after dashing"}},
+                    {false,{30,"% increased weapon flat damage"}}
+};
+
+void drawSkillTree(RenderWindow& window) {
+
+    Texture& texture = TextureManager::getInstance().find("SkillTree");
+
+    Sprite skillTree(texture);
+    skillTree.setPosition(Vector2f(-400, 700));
+    skillTree.setScale(Vector2f(8, 5));
+
+    window.draw(skillTree);
+
+    vector<CircleShape> nodes;
+    for (int i=0;i<3;i++) {
+        int l=0,r=0;
+        for (int j=0;j<pow(2,i);j++) {
+            CircleShape node(20, 30);
+            if (j%2!=0) {
+                node.setPosition(Vector2f(-200-(l*50+50), 750+(i*100)));
+                l++;
+            }
+            else {
+                node.setPosition(Vector2f(-200+(r*50+50*min(1,i)), 750+(i*100)));
+                r++;
+            }
+            nodes.push_back(node);
+            window.draw(node);
+        }
+    }
+
+    Font font;
+    if (!font.openFromFile("./res/PixelPurl.ttf")) {
+        cout << "Failed to load font: PixelPurl.ttf" << endl;
+        return;
+    }
+
+    Text text(font);
+
+    for (int i=0;i<func.size();i++) {
+        if (nodes[i].getGlobalBounds().contains( window.mapPixelToCoords(Mouse::getPosition(window)))) {
+            nodes[i].setFillColor(Color::Black);
+
+            text.setString(func[i].second.second);
+            text.setCharacterSize(18);
+            text.setFillColor(Color::White);
+            text.setPosition(nodes[i].getPosition()-Vector2f(-40, 40));
+
+            RectangleShape back;
+            back.setSize(Vector2f(text.getGlobalBounds().size.x, text.getGlobalBounds().size.y+15));
+            back.setFillColor(Color::Black);
+            back.setPosition(text.getPosition());
+
+            Text nrSkp(font,"You have " + to_string(skillPoints) + " skill points.");
+            nrSkp.setFillColor(Color::Black);
+            nrSkp.setPosition(Vector2f(-100,700));
+            nrSkp.setCharacterSize(40);
+
+            window.draw(nrSkp);
+            window.draw(back);
+            window.draw(text);
+            window.draw(nodes[i]);
+
+            if (leftClick && skillPoints>=1 && !func[i].first) {
+                func[i].first = true;
+                skillPoints--;
+            }
+        }
+
+        if (func[i].first) {
+            nodes[i].setFillColor(Color::Black);
+            window.draw(nodes[i]);
+        }
+
+        if (func[0].first) {
+            totalDamageIncrease+=func[0].second.first;
+            func[0].second.first = 0;
+        }
+        if (func[1].first) {
+            playerMaxHealth=playerMaxHealth+(playerMaxHealth * (float)func[1].second.first/100);
+            func[1].second.first = 0;
+        }
+        if (func[2].first) {
+            // trebuie sa stim cand player-ul da damage
+            // de implementat
+        }
+        if (func[3].first) {
+            // nu sunt sigur de cum functioneaza damage-ul
+            // de implementat
+        }
+        if (func[4].first) {
+            // takedamage trb implementat
+        }
+        if (func[5].first) {
+
+            if (dashing){
+                totalDamageIncrease+=func[5].second.first;
+                func[5].second.first = 0;
+                dashing = false;
+            }
+
+
+            // bad time counter idk how to make it work
+            if (frameCount%300==0 && func[5].second.first==0) {
+                func[5].second.first=20;
+                totalDamageIncrease-=func[5].second.first;
+            }
+
+        }
+        if (func[6].first) {
+            // de implementat
+        }
+    }
+
+
+    playerDamageMultiplier=1.0f + 1.0f * totalDamageIncrease/100;
+    cout<<playerDamageMultiplier<<endl;
+}
+
 void draw(RenderWindow& window) {
     // deseneaza fiecare tile din vectorul mapTiles
     for (Tile& tile : mapTiles) {
@@ -1594,6 +1727,27 @@ void draw(RenderWindow& window) {
     // those needs 2 be on top
     drawBars(window); // desenare bare de viata, armura si xp
     drawText(window); // desenare text cu nivelul si banii
+
+    drawSkillTree(window);
+}
+
+bool up = true;
+void uiUpdate(RenderWindow& window, const View &skillTree, const View &playerView) {
+
+    // allows switching between the player screen and the skill tree
+    if (keysPressed[static_cast<int>(Keyboard::Key::P)]) {
+        if (window.getView().getCenter()==playerView.getCenter() && up) {
+            window.setView(skillTree);
+            up = false;
+        }
+        else if (window.getView().getCenter()==skillTree.getCenter() && up) {
+            window.setView(playerView);
+            up = false;
+
+        }
+    }
+
+    if (keysReleased[static_cast<int>(Keyboard::Key::P)]) up = true;
 }
 
 // -------------------------------------------------------------------- main --------------------------------------------------------------------
@@ -1608,6 +1762,13 @@ int main() {
     window.setFramerateLimit(FPS_LIMIT);
     init();
 
+    View skillTree;
+    skillTree.setCenter(Vector2f(0,1000));
+    skillTree.setSize(window.getView().getSize());
+    View playerView;
+    playerView.setCenter(window.getView().getCenter());
+    playerView.setSize(window.getView().getSize());
+
     // in sfml 3.0, pollEvent returneaza un std::optional<sf::Event>
     while (window.isOpen()) {
         while (optional<Event> eventOpt = window.pollEvent()) {
@@ -1618,13 +1779,17 @@ int main() {
             }
             if (event.is<Event::KeyPressed>()) {
                 auto keyEv = event.getIf<Event::KeyPressed>();
-                if(keyEv)
+                if(keyEv) {
                     keysPressed[static_cast<int>(keyEv->code)] = true;
+                    keysReleased[static_cast<int>(keyEv->code)] = false;
+                }
             }
             if (event.is<Event::KeyReleased>()) {
                 auto keyEv = event.getIf<Event::KeyReleased>();
-                if(keyEv)
+                if(keyEv) {
                     keysPressed[static_cast<int>(keyEv->code)] = false;
+                    keysReleased[static_cast<int>(keyEv->code)] = true;
+                }
             }
             if (event.is<Event::MouseButtonPressed>()) {
                 auto mouseEv = event.getIf<Event::MouseButtonPressed>();
@@ -1655,6 +1820,7 @@ int main() {
 
         window.clear();     // sterge continutul ferestrei
         controls();         // proceseaza input-ul jucatorului
+        uiUpdate(window, skillTree, playerView);
         update(window);       // actualizeaza starea jocului
         draw(window);       // deseneaza totul in fereastra
         window.display();   // afiseaza continutul desenat pe ecran
