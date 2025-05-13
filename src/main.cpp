@@ -46,7 +46,9 @@ template<typename T>
 float distance(Vector2<T> a, Vector2<T> b) {
     return sqrt(pow(a.x - b.x, 2) + pow(a.y - b.y, 2));
 }
-
+// -------------------------------------------------------------------- Views --------------------------------------------------------------------
+View skillTree;
+View playerView;
 // -------------------------------------------------------------------- variabile globale legate de joc --------------------------------------------------------------------
 bool mouseDown = false;           // flag: true daca mouse-ul este apasat
 bool leftClick = false;           // flag: true daca butonul stang a fost apasat
@@ -55,7 +57,7 @@ float mouseX = 0, mouseY = 0;       // coordonatele curente ale mouse-ului
 bool keysPressed[256] = { false }; // starea tastelor
 bool keysReleased[256] = { false };
 
-int playerX = 0;
+int playerX = 200;
 int playerY = 300; // pozitia initiala a jucatorului
 bool notMoving = true; // flag pentru miscarea jucatorului
 int playerSpeed = 1;              // viteza de miscare a jucatorului
@@ -87,7 +89,9 @@ int playerMaxHealth = 100; // viata maxima a jucatorului
 int playerArmor = 0; // armura jucatorului
 int playerMaxArmor = 100; // armura maxima a jucatorului
 float playerDamageMultiplier = 1; // muliplicatorul de damage al jucatorului care va fi inmultit cu damage-ul armei
+float totalDamageIncrease=0; // totalul de %damage increase al jucatorului
 
+bool skillTreeDown = true; // folosit pt schimbarea intre playerView si skillTreeView
 
 // ---------------------------------------------------- functii folosite de obiecte (forward decl) -----------------------------------------------------------
 
@@ -1022,6 +1026,170 @@ public:
     void setToBeDeleted(bool toBeDeleted) { this->toBeDeleted = toBeDeleted; } // setter pentru flag-ul de autodistrugere
 };
 
+// clasa de noduri pentru skill tree
+class skillTreeNode {
+private:
+    bool active = false;    // flag pentru verificarea daca nodul este alocat
+
+    int currentAlloc = 0;   // cate puncte alocate sunt in nod
+    int maxAlloc = 0;   // maximul de puncte alocate
+    int cost = 0;   // cate skillpointuri costa un punct alocat
+    int levelReq = 1; // nivelul minim de experienta necesar pentru a aloca un punct
+    string description; // descriptia nodului care este afisata in dreapta sus
+    CircleShape node = CircleShape(30); // nodul care este desenat pe ecran
+    float x = 0,y = 0; // positia nodului
+
+public:
+
+    // constructor default
+    skillTreeNode() {
+        active = false;
+        cost = 0;
+        description = "Test";
+    }
+
+    // constructor cu circleshape
+   skillTreeNode(int cost, string description, CircleShape node, float x, float y) {
+        this->cost = cost;
+        this->description = description;
+        this->node = node;
+        this->x = node.getPosition().x;
+        this->y = node.getPosition().y;
+   }
+
+    // constructor pentru date principale
+    skillTreeNode(int maxAlloc,int cost, int levelReq, string description, float x, float y) {
+        this->maxAlloc = maxAlloc;
+        this->cost = cost;
+        this->levelReq = levelReq;
+        this->description = description;
+        this->node.setPosition(Vector2f(x,y));
+        this->x = x;
+        this->y = y;
+    }
+
+    // functie pentru updatarea si desenarea nodului
+    void draw(RenderWindow &window, Font &font) {
+        if (node.getGlobalBounds().contains( window.mapPixelToCoords(Mouse::getPosition(window)))) {
+            // facem nodul negru daca suntem cu mouse-ul pe el
+            node.setFillColor(Color::Black);
+
+            //  scrisul pentru alocare care este desenat in dreapta jos
+            Text alloc(font, to_string(currentAlloc) + "/" + to_string(maxAlloc), 18);
+            alloc.setFont(font);
+            alloc.setPosition(node.getPosition() - Vector2f(-40, -65));
+
+            // background-ul pentru alocare
+            RectangleShape allocBack;
+            allocBack.setSize(Vector2f(alloc.getGlobalBounds().size.x, alloc.getGlobalBounds().size.y+15));
+            allocBack.setFillColor(Color::Black);
+            allocBack.setPosition(alloc.getPosition());
+
+            // scrisul pentru descriptia nodului care este desenat in dreapta sus
+            Text desc(font, description, 18);
+            desc.setFillColor(Color::White);
+            desc.setPosition(node.getPosition()-Vector2f(-40, 40));
+
+            // background-ul pentru descriptie
+            RectangleShape descBack;
+            descBack.setSize(Vector2f(desc.getGlobalBounds().size.x, desc.getGlobalBounds().size.y+15));
+            descBack.setFillColor(Color::Black);
+            descBack.setPosition(desc.getPosition());
+
+            // desenarea fiecaru-ia (ordinea conteaza!!)
+
+            window.draw(node);
+
+            window.draw(descBack);
+            window.draw(desc);
+
+            window.draw(allocBack);
+            window.draw(alloc);
+
+        }else node.setFillColor(Color::White); // daca nu mai suntem cu mouse-ul pe nod il facem inapoi alb
+
+        // daca am alocat toate punctele dintr-un nod il facem verde
+        if (currentAlloc == maxAlloc) {
+            node.setFillColor(Color::Green);
+        }
+
+        // daca nu avem destul level pentru noduri atunci sunt facute rosu
+        if (level<levelReq) {
+            node.setFillColor(Color::Red);
+        }
+
+        //ordinea functiilor de mai sus conteaza!!!(in teorie)
+    }
+
+    // functie pentru verificarea alocarii unui nod
+    void allocate(RenderWindow &window) {
+        // verificam daca mouse-ul este pe nod, daca apasam, daca avem destul level, daca avem destule
+        // skillpoint-uri si daca mai sunt puncte de alocat
+        if(node.getGlobalBounds().contains( window.mapPixelToCoords(Mouse::getPosition(window)))) {
+            if (leftClick && level>=levelReq && skillPoints>=cost
+                && currentAlloc<maxAlloc) {
+                active = true; // nodul devine alocat
+                skillPoints-=cost;
+                currentAlloc+=1;
+                cout << "Skill activated" << endl;
+                leftClick=false; // resetam butonul de apasare pentru a nu apasa de prea multe ori
+                }
+        }
+    }
+
+    // setters
+    void setActive(bool active) {
+       this->active = active;
+    }
+
+    void setPosition(float x, float y) {
+        this->node.setPosition(Vector2f(x,y));
+        this->x = node.getPosition().x;
+        this->y = node.getPosition().y;
+   }
+
+    void setCurrentAlloc(int currentAlloc) {
+        this->currentAlloc = currentAlloc;
+    }
+
+    // getters
+    bool getActive() {
+       return active;
+   }
+
+    float getX() {
+       return x;
+   }
+
+    float getY() {
+       return y;
+    }
+
+    CircleShape getNode() {
+        return node;
+    }
+
+    string getDescription() {
+        return description;
+    }
+
+    int getCost() {
+        return cost;
+    }
+
+    int getMaxAlloc() {
+        return maxAlloc;
+    }
+
+    int getLevelReq() {
+        return levelReq;
+    }
+
+    int getCurrentAlloc() {
+        return currentAlloc;
+    }
+};
+
 // -------------------------------------------------------------------- containere --------------------------------------------------------------------
 
 vector<Object> mapObjects;  // container pentru obiectele din harta
@@ -1032,6 +1200,8 @@ vector<ItemObject> worldItems;
 // inamici & entitati
 vector<EnemyGoblin> mapGoblins; // container pentru inamicii de tip goblin
 vector<EnemyBaphomet> mapBaphomets; // container pentru inamicii de tip Baphomet
+// noduri skilltree
+skillTreeNode skills[10];
 
 // ---------------------------------------------------------- functiile folosite de obiecte --------------------------------------------------------------------
 
@@ -1305,6 +1475,21 @@ void update(RenderWindow& window) {
     }
 
     //cout<<mouseX<<" "<<mouseY<<endl;
+
+    // allows switching between the player screen and the skill tree
+    if (keysPressed[static_cast<int>(Keyboard::Key::P)]) {
+        if (window.getView().getCenter()==playerView.getCenter() && skillTreeDown) {
+            window.setView(skillTree);
+            skillTreeDown = false;
+        }
+        else if (window.getView().getCenter()==skillTree.getCenter() && skillTreeDown) {
+            window.setView(playerView);
+            skillTreeDown = false;
+
+        }
+    }
+
+    if (keysReleased[static_cast<int>(Keyboard::Key::P)]) skillTreeDown = true;
 }
 
 // -------------------------------------------------------------------- desenare --------------------------------------------------------------------
@@ -1356,7 +1541,7 @@ void drawPlayerWeapon(RenderWindow& window) {
         sprite.setPosition(Vector2f(handX, playerY)); // seteaza pozitia sprite-ului (folosim vector2f)
         
         // Calculeaza unghiul de rotatie catre mouse
-        float angle = atan2(mouseY - playerY, mouseX - (212)) * 180 / 3.14159f + 90; // +90 pentru a alinia sprite-ul
+        float angle = atan2(mouseY - playerY, mouseX - (handX)) * 180 / 3.14159f + 90; // +90 pentru a alinia sprite-ul
         sprite.setRotation(sf::degrees(angle)); // seteaza rotatia sprite-uluis
         
         window.draw(sprite); // deseneaza sprite-ul
@@ -1568,8 +1753,9 @@ void drawEnemies(RenderWindow& window) {
     }
 }
 
-float totalDamageIncrease=0;
+// bonusul total adaugat de skill tree la damageMultiplier
 
+/*
 vector<pair<bool,pair<int,String>>> func {
                     {false,{10,"% increased damage"}},
                     {false,{10,"% increased health"}},
@@ -1580,33 +1766,42 @@ vector<pair<bool,pair<int,String>>> func {
                     {false,{30,"% increased weapon flat damage"}}
 };
 
+*/
+
 void drawSkillTree(RenderWindow& window) {
 
     Texture& texture = TextureManager::getInstance().find("SkillTree");
 
+    //creare background
     Sprite skillTree(texture);
     skillTree.setPosition(Vector2f(-400, 700));
     skillTree.setScale(Vector2f(8, 5));
 
     window.draw(skillTree);
 
-    vector<CircleShape> nodes;
-    for (int i=0;i<3;i++) {
-        int l=0,r=0;
-        for (int j=0;j<pow(2,i);j++) {
-            CircleShape node(20, 30);
-            if (j%2!=0) {
-                node.setPosition(Vector2f(-200-(l*50+50), 750+(i*100)));
-                l++;
-            }
-            else {
-                node.setPosition(Vector2f(-200+(r*50+50*min(1,i)), 750+(i*100)));
-                r++;
-            }
-            nodes.push_back(node);
-            window.draw(node);
-        }
+    // generarea nodurilor
+    int nrSkills = 10;
+
+    int x=-350,y=950, offx=200, offy=150; // x,y = pozitia nodului, offx,offy = offset-ul nodului
+    int levelReq=1,levelScale=5;
+
+    // initializare o singura data
+    if (skills[0].getCost()==0) {
+        skills[0] = skillTreeNode(5,1, levelReq, "Test",x, y);
+
+        skills[1] = skillTreeNode(5,5, levelReq*levelScale, "Test",x+offx, y-offy);
+        skills[2] = skillTreeNode(5,5, levelReq*levelScale, "Test",x+offx, y);
+        skills[3] = skillTreeNode(5,5, levelReq*levelScale, "Test",x+offx, y+offy);
+
+        skills[4] = skillTreeNode(5,5, levelReq*levelScale*2, "Test",x+2*offx,y-offy);
+        skills[5] = skillTreeNode(5,5, levelReq*levelScale*2, "Test",x+2*offx,y);
+        skills[6] = skillTreeNode(5,5, levelReq*levelScale*2, "Test",x+2*offx,y+offy);
+
+        skills[7] = skillTreeNode(5,5, levelReq*levelScale*3, "Test",x+3*offx,y-offy);
+        skills[8] = skillTreeNode(5,5, levelReq*levelScale*3, "Test",x+3*offx,y);
+        skills[9] = skillTreeNode(5,5, levelReq*levelScale*3, "Test",x+3*offx,y+offy);
     }
+
 
     Font font;
     if (!font.openFromFile("./res/PixelPurl.ttf")) {
@@ -1614,86 +1809,23 @@ void drawSkillTree(RenderWindow& window) {
         return;
     }
 
-    Text text(font);
+    // textul de sus afisand cate skillpoint-uri are jucatorul
+    Text nrSkp(font,"You have " + to_string(skillPoints) + " skill points.");
+    nrSkp.setFillColor(Color::Black);
+    nrSkp.setPosition(Vector2f(-100,700));
+    nrSkp.setCharacterSize(40);
 
-    for (int i=0;i<func.size();i++) {
-        if (nodes[i].getGlobalBounds().contains( window.mapPixelToCoords(Mouse::getPosition(window)))) {
-            nodes[i].setFillColor(Color::Black);
+    window.draw(nrSkp);
 
-            text.setString(func[i].second.second);
-            text.setCharacterSize(18);
-            text.setFillColor(Color::White);
-            text.setPosition(nodes[i].getPosition()-Vector2f(-40, 40));
-
-            RectangleShape back;
-            back.setSize(Vector2f(text.getGlobalBounds().size.x, text.getGlobalBounds().size.y+15));
-            back.setFillColor(Color::Black);
-            back.setPosition(text.getPosition());
-
-            Text nrSkp(font,"You have " + to_string(skillPoints) + " skill points.");
-            nrSkp.setFillColor(Color::Black);
-            nrSkp.setPosition(Vector2f(-100,700));
-            nrSkp.setCharacterSize(40);
-
-            window.draw(nrSkp);
-            window.draw(back);
-            window.draw(text);
-            window.draw(nodes[i]);
-
-            if (leftClick && skillPoints>=1 && !func[i].first) {
-                func[i].first = true;
-                skillPoints--;
-            }
-        }
-
-        if (func[i].first) {
-            nodes[i].setFillColor(Color::Black);
-            window.draw(nodes[i]);
-        }
-
-        if (func[0].first) {
-            totalDamageIncrease+=func[0].second.first;
-            func[0].second.first = 0;
-        }
-        if (func[1].first) {
-            playerMaxHealth=playerMaxHealth+(playerMaxHealth * (float)func[1].second.first/100);
-            func[1].second.first = 0;
-        }
-        if (func[2].first) {
-            // trebuie sa stim cand player-ul da damage
-            // de implementat
-        }
-        if (func[3].first) {
-            // nu sunt sigur de cum functioneaza damage-ul
-            // de implementat
-        }
-        if (func[4].first) {
-            // takedamage trb implementat
-        }
-        if (func[5].first) {
-
-            if (dashing){
-                totalDamageIncrease+=func[5].second.first;
-                func[5].second.first = 0;
-                dashing = false;
-            }
-
-
-            // bad time counter idk how to make it work
-            if (frameCount%300==0 && func[5].second.first==0) {
-                func[5].second.first=20;
-                totalDamageIncrease-=func[5].second.first;
-            }
-
-        }
-        if (func[6].first) {
-            // de implementat
-        }
+    // foru-l principal pentru updatarea skilltree-ului
+    for (int i=0;i<nrSkills;i++) {
+        window.draw(skills[i].getNode());
+        skills[i].draw(window, font);
+        skills[i].allocate(window);
     }
 
-
-    playerDamageMultiplier=1.0f + 1.0f * totalDamageIncrease/100;
-    cout<<playerDamageMultiplier<<endl;
+    //playerDamageMultiplier=1.0f + 1.0f * totalDamageIncrease/100;
+    //cout<<playerDamageMultiplier<<endl;
 }
 
 void draw(RenderWindow& window) {
@@ -1731,24 +1863,6 @@ void draw(RenderWindow& window) {
     drawSkillTree(window);
 }
 
-bool up = true;
-void uiUpdate(RenderWindow& window, const View &skillTree, const View &playerView) {
-
-    // allows switching between the player screen and the skill tree
-    if (keysPressed[static_cast<int>(Keyboard::Key::P)]) {
-        if (window.getView().getCenter()==playerView.getCenter() && up) {
-            window.setView(skillTree);
-            up = false;
-        }
-        else if (window.getView().getCenter()==skillTree.getCenter() && up) {
-            window.setView(playerView);
-            up = false;
-
-        }
-    }
-
-    if (keysReleased[static_cast<int>(Keyboard::Key::P)]) up = true;
-}
 
 // -------------------------------------------------------------------- main --------------------------------------------------------------------
 int main() {
@@ -1762,10 +1876,9 @@ int main() {
     window.setFramerateLimit(FPS_LIMIT);
     init();
 
-    View skillTree;
     skillTree.setCenter(Vector2f(0,1000));
     skillTree.setSize(window.getView().getSize());
-    View playerView;
+
     playerView.setCenter(window.getView().getCenter());
     playerView.setSize(window.getView().getSize());
 
@@ -1817,10 +1930,8 @@ int main() {
                 }
             }
         }
-
         window.clear();     // sterge continutul ferestrei
         controls();         // proceseaza input-ul jucatorului
-        uiUpdate(window, skillTree, playerView);
         update(window);       // actualizeaza starea jocului
         draw(window);       // deseneaza totul in fereastra
         window.display();   // afiseaza continutul desenat pe ecran
