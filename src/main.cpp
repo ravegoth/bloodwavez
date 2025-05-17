@@ -417,7 +417,7 @@ public:
     }
 
     void draw(sf::RenderWindow& window) {
-        std:cout<<"test1";
+        //std:cout<<"test1";
        if(!isVisible){
 
             for(auto& slot : weaponSlots) window.draw(slot);
@@ -2348,6 +2348,9 @@ void draw(RenderWindow& window) {
     drawText(window); // desenare text cu nivelul si banii
 
     drawSkillTree(window);
+
+    inventoryWindow.draw(window);
+    drawItemInfo(window);
 }
 
 
