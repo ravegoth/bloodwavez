@@ -13,7 +13,6 @@
 #include <tlhelp32.h>         // pentru operatii pe procese si thread-uri in windows
 
 // ------ alte fisiere
-#include "Inventory.hpp"
 
 // -------------------------------------------------------------------- sfml --------------------------------------------------------------------
 #include <SFML/Graphics.hpp>  // pentru grafica (desenare forme, sprites, etc.)
@@ -62,7 +61,6 @@ int playerY = 300; // pozitia initiala a jucatorului
 bool notMoving = true; // flag pentru miscarea jucatorului
 int playerSpeed = 1;              // viteza de miscare a jucatorului
 
-Inventory playerInventory;
 string playerHolding = "weapon_basic_sword"; // arma pe care o tine jucatorul init
 Vector2f swordHitbox1(0, 0); // hitbox-ul armei (sword1)
 Vector2f swordHitbox2(0, 0); // hitbox-ul armei (sword2ss)
@@ -119,14 +117,489 @@ public:
     }
 };
 
-// pt fi picked up
+class TextureManager {
+private:
+    std::map<std::string, sf::Texture> textures; // mapa pentru a stoca texturile incarcate
+    // contructor privat pentru a preveni instantierea directa 
+    // singleton pattern
+    TextureManager() {}
+
+public:
+    // bla bla bla singleton stuff
+    TextureManager(const TextureManager&) = delete;
+    TextureManager& operator=(const TextureManager&) = delete;
+
+    // instancea singletons
+    static TextureManager& getInstance() {
+        static TextureManager instance; // Instanta unica
+        return instance;
+    }
+
+    sf::Texture& find(const std::string& name) {
+        std::string filename = "./res/" + name + ".png";
+        // verifica daca textura este deja incarcata
+        if (textures.find(filename) == textures.end()) {
+            sf::Texture texture;
+            if (!texture.loadFromFile(filename)) {
+                std::cout << "Failed to load texture: " << filename << "\n"; 
+            }
+            textures[filename] = texture; // adauga textura in mapa
+        }
+        return textures[filename]; // returneaza textura incarcata
+    }
+
+    void justLoad(const std::string& name) {
+        std::string filename = "./res/" + name + ".png";
+        // verifica daca textura este deja incarcata
+        if (textures.find(filename) == textures.end()) {
+            sf::Texture texture;
+            if (!texture.loadFromFile(filename)) {
+                std::cout << "Failed to load texture: " << filename << "\n"; 
+            }
+            textures[filename] = texture; // adauga textura in mapa
+            std::cout << "Loaded texture: " << filename << "\n"; // afiseaza mesaj de incarcare
+        }
+    }
+
+    void clear() {
+        textures.clear(); // sterge toate textele incarcate
+    }
+    // destructor
+    ~TextureManager() {
+        clear(); // sterge toate textele incarcate
+    }
+    // metoda pentru a verifica daca textura este incarcata
+    bool isLoaded(const std::string& name) {
+        std::string filename = "./res/" + name + ".png";
+        return textures.find(filename) != textures.end(); // verifica daca textura este incarcata
+    }
+};
+
+constexpr int INVENTORY_WIDTH = 600;
+constexpr float INVENTORY_HEIGHT = 400;
+constexpr int SLOT_SIZE = 64;
+constexpr int PADDING = 10;
+constexpr int COLUMNS = 6;
+
+enum class ItemType {
+    Weapon,
+    Equipment,
+    Null
+};
+
+struct Item {
+    std::string name;
+    std::string description;
+    std::string texturePath;
+    ItemType type;
+    sf::Sprite sprite;
+    sf::Vector2f position;
+
+    Item(std::string name, std::string description, std::string texturePath, ItemType type)
+        : name(name), description(description), texturePath(texturePath), type(type), sprite(TextureManager::getInstance().find(texturePath)) {
+            sf::Texture texture = TextureManager::getInstance().find(texturePath);
+            sprite.setScale(Vector2f(
+            SLOT_SIZE / static_cast<float>(texture.getSize().x),
+            SLOT_SIZE / static_cast<float>(texture.getSize().y)
+        ));
+        }
+};
+
 struct ItemObject {
     Object obj;
-    std::shared_ptr<Item> item;
+    Item item;
     bool pickedUp = false;
 
-    ItemObject(Object obj, std::shared_ptr<Item> item) : obj(obj), item(item) {}
+    ItemObject(Object obj, Item item) : obj(obj), item(item) {}
+    ItemObject() : obj(Object(350, 350, 10, Color::Magenta)), 
+    item(Item("Null", "", "weapon_basic_sword", ItemType::Null)),
+    pickedUp(true) {};
 };
+
+vector<ItemObject> worldItems;
+
+class Inventory {
+private:
+    ItemObject firstWeapon;
+    ItemObject secondWeapon;
+    std::vector<ItemObject> stackables;
+    int itemSlots = 16;
+    int currentlyOccupied = 0;
+
+public:
+
+    Inventory() {
+        stackables.reserve(itemSlots);
+    }
+
+    std::vector<ItemObject>& getEquipment()
+    {
+        return stackables;
+    }
+
+    ItemObject getFirstWeapon()
+    {
+        return firstWeapon;
+    }
+
+    ItemObject getSecondWeapon()
+    {
+        return secondWeapon;
+    }
+    //todo implementeaza inventar vizual
+    bool pickUp(ItemObject itemobj) {
+        std::cout << stackables.size() << "\n";
+
+        switch (itemobj.item.type) {
+            case ItemType::Null:
+                return false;
+
+            case ItemType::Weapon:
+                // Assign to first empty weapon slot
+                if (firstWeapon.item.type == ItemType::Null) {
+                    firstWeapon = itemobj;
+                    std::cout << "Weapon assigned to slot 1\n";
+                    return true;
+                } else if (secondWeapon.item.type == ItemType::Null) {
+                    secondWeapon = itemobj;
+                    std::cout << "Weapon assigned to slot 2\n";
+                    return true;
+                } else {
+                    std::cout << "Both weapon slots are full\n";
+                    return false; // poate faci un slot de backup
+                }
+
+            case ItemType::Equipment:
+                if (currentlyOccupied >= itemSlots) return false;
+
+                currentlyOccupied++;
+                stackables.push_back(itemobj);
+                return true;
+        }
+
+        return false;
+    }
+
+    void RemoveEquipment(int index)
+    {
+        if(index >= 0 && index < static_cast<int>(stackables.size())) {
+            ItemObject removedItem = stackables[index];
+
+            removedItem.pickedUp = false;
+            removedItem.obj.x = rand_uniform(190, 210);
+            removedItem.obj.y = rand_uniform(playerY - 10, playerY + 10);
+
+            worldItems.push_back(removedItem);
+            
+            stackables.erase(stackables.begin() + index);
+            currentlyOccupied--;
+        }
+    }
+
+    void dropWeapon(int slot) {
+        ItemObject dropped;
+
+        if (slot == 1 && firstWeapon.item.type != ItemType::Null) {
+            dropped = firstWeapon;
+            dropped.pickedUp = false;
+            dropped.obj.x = rand_uniform(190, 210);
+            dropped.obj.y = rand_uniform(playerY - 10, playerY + 10);
+            firstWeapon = ItemObject(); // reset to null
+        }
+        else if (slot == 2 && secondWeapon.item.type != ItemType::Null) {
+            dropped = secondWeapon;
+            dropped.pickedUp = false;
+            dropped.obj.x = rand_uniform(190, 210);
+            dropped.obj.y = rand_uniform(playerY - 10, playerY + 10);
+            secondWeapon = ItemObject(); // reset to null
+        }
+        worldItems.push_back(dropped);
+    }
+
+
+
+};
+
+Inventory playerInventory;
+
+class InventoryWindow {
+private:
+    sf::RectangleShape background;
+    sf::Text titleText;
+    std::vector<sf::RectangleShape> weaponSlots;
+    sf::Font font;
+    sf::Text tooltipText;
+    sf::RectangleShape tooltipBackground;
+    int hoveredIndex = -1;
+    bool removedItemOnClick = false;
+
+public:
+    bool isVisible = false;
+
+    void updateBackgroundSize() {
+        std::vector<ItemObject>& equipment = playerInventory.getEquipment();
+        int rows = static_cast<int>(std::ceil(equipment.size() / static_cast<float>(COLUMNS)));
+        int extraHeight = rows * (SLOT_SIZE + PADDING);
+        int dynamicHeight = 50 + extraHeight + PADDING;
+
+        background.setSize(sf::Vector2f(INVENTORY_WIDTH, max(50.f, static_cast<float>(dynamicHeight))));
+    }
+
+    InventoryWindow(sf::Font& font): titleText(font, "", 27), tooltipText(font, "", 27){
+        
+        this->font = font;
+
+        background.setSize(sf::Vector2f(INVENTORY_WIDTH, INVENTORY_HEIGHT));
+        background.setFillColor(sf::Color(30, 30, 30, 220));
+        background.setOutlineThickness(2);
+        background.setOutlineColor(sf::Color::White);
+
+        // Initialize weapon slots
+        for(int i = 0; i < 2; i++) {
+            sf::RectangleShape slot(sf::Vector2f(SLOT_SIZE, SLOT_SIZE));
+            slot.setPosition(Vector2f(PADDING + i * (SLOT_SIZE + PADDING), 520));
+            slot.setFillColor(sf::Color(80, 80, 80));
+            slot.setOutlineThickness(1);
+            slot.setOutlineColor(sf::Color::White);
+            weaponSlots.push_back(slot);
+        }
+
+        sf::Text titleText(font, "", 27);
+        titleText.setFont(font);
+        titleText.setString("Inventory");
+        titleText.setCharacterSize(24);
+        titleText.setPosition(Vector2f(PADDING, PADDING));
+
+        tooltipBackground.setFillColor(sf::Color(0, 0, 0, 200));
+        tooltipText.setFont(font);
+        tooltipText.setCharacterSize(16);
+
+        updateBackgroundSize();
+    }
+
+    void update(sf::RenderWindow& window, Inventory& inventory) {
+
+        sf::Vector2f mousePos = window.mapPixelToCoords(sf::Mouse::getPosition(window));
+        hoveredIndex = -100;
+        
+        std::vector<ItemObject>& equipment = playerInventory.getEquipment();
+        
+        // Check equipment hover
+        for(size_t i = 0; i < equipment.size(); i++) {
+            if(equipment[i].item.sprite.getGlobalBounds().contains(mousePos)) {
+                hoveredIndex = static_cast<int>(i);
+                break;
+            }
+        }
+
+        if(weaponSlots[0].getGlobalBounds().contains(mousePos)) {
+            hoveredIndex = static_cast<int>(-1);
+        }
+
+        if(weaponSlots[1].getGlobalBounds().contains(mousePos)) {
+            hoveredIndex = static_cast<int>(-2);
+        }
+
+        // Handle click to drop
+        if(sf::Mouse::isButtonPressed(sf::Mouse::Button::Left)) {
+            if(hoveredIndex != -100 && removedItemOnClick == false) {
+                //inventory.removeItem(hoveredIndex);
+                onRemoveItem(hoveredIndex);
+                removedItemOnClick = true; // avoid removing multiple items in 1 click
+            }
+        }
+        else
+        {
+            removedItemOnClick = false;
+        }
+
+        updateTooltip(mousePos);
+    }
+
+    void draw(sf::RenderWindow& window) {
+        std:cout<<"test1";
+       if(!isVisible){
+
+            for(auto& slot : weaponSlots) window.draw(slot);
+
+            if (playerInventory.getFirstWeapon().item.type != ItemType::Null) {
+                Sprite s = playerInventory.getFirstWeapon().item.sprite;
+                s.setPosition(weaponSlots[0].getPosition());
+                window.draw(s);
+            }
+
+            if (playerInventory.getSecondWeapon().item.type != ItemType::Null) {
+                Sprite s = playerInventory.getSecondWeapon().item.sprite;
+                s.setPosition(weaponSlots[1].getPosition());
+                window.draw(s);
+            }
+
+            if(hoveredIndex != -100) {
+                window.draw(tooltipBackground);
+                window.draw(tooltipText);
+            }
+            return;
+       }
+
+        // Center window
+        sf::Vector2f center = window.getView().getCenter();
+        background.setPosition(Vector2f(center.x - INVENTORY_WIDTH/2, center.y - INVENTORY_HEIGHT/2));
+
+        positionEquipmentSlots();
+
+        window.draw(background);
+        window.draw(titleText);
+
+        for(auto& slot : weaponSlots) window.draw(slot);
+
+        if (playerInventory.getFirstWeapon().item.type != ItemType::Null) {
+            Sprite s = playerInventory.getFirstWeapon().item.sprite;
+            s.setPosition(weaponSlots[0].getPosition());
+            window.draw(s);
+        }
+
+        if (playerInventory.getSecondWeapon().item.type != ItemType::Null) {
+            Sprite s = playerInventory.getSecondWeapon().item.sprite;
+            s.setPosition(weaponSlots[1].getPosition());
+            window.draw(s);
+        }
+        
+        std::vector<ItemObject>& equipment = playerInventory.getEquipment();
+        // Draw equipment items
+        for(auto& itemobj : equipment) {
+            window.draw(itemobj.item.sprite);
+        }
+
+        // Draw tooltip
+        if(hoveredIndex != -100) {
+            window.draw(tooltipBackground);
+            window.draw(tooltipText);
+        }
+    }
+
+    bool onAddItem(ItemObject item) {
+        if(playerInventory.pickUp(item) == false) return false;
+        positionEquipmentSlots();
+        updateBackgroundSize();
+        return true;
+    }
+
+    void positionEquipmentSlots() {
+        sf::Vector2f bgPos = background.getPosition();
+        const float startX = bgPos.x + PADDING;
+        const float startY = bgPos.y + 50;
+
+        std::vector<ItemObject>& equipment = playerInventory.getEquipment();
+
+        for(size_t i = 0; i < equipment.size(); i++) {
+            //std::cout<<equipment[i].item.name + "\n";
+            int col = i % COLUMNS;
+            int row = i / COLUMNS;
+            sf::Vector2f pos(
+                startX + col * (SLOT_SIZE + PADDING),
+                startY + row * (SLOT_SIZE + PADDING)
+            );
+            equipment[i].item.position = pos;
+            equipment[i].item.sprite.setPosition(pos);
+        }
+    }
+
+    void updateTooltip(sf::Vector2f mousePos) {
+        if(hoveredIndex == -100) return;
+
+        if(hoveredIndex == -1) {
+            const auto& item = playerInventory.getFirstWeapon().item;
+            tooltipText.setString(item.name + "\n" + item.description);
+            
+            sf::FloatRect bounds = tooltipText.getLocalBounds();
+            tooltipBackground.setSize(sf::Vector2f(bounds.size.x + 20, bounds.size.y + 20));
+            
+            tooltipBackground.setPosition(Vector2f(mousePos.x + 20, mousePos.y + 20));
+            tooltipText.setPosition(Vector2f(mousePos.x + 25, mousePos.y + 25));
+            return;
+        }
+
+        if(hoveredIndex == -2) {
+            const auto& item = playerInventory.getSecondWeapon().item;
+            tooltipText.setString(item.name + "\n" + item.description);
+            
+            sf::FloatRect bounds = tooltipText.getLocalBounds();
+            tooltipBackground.setSize(sf::Vector2f(bounds.size.x + 20, bounds.size.y + 20));
+            
+            tooltipBackground.setPosition(Vector2f(mousePos.x + 20, mousePos.y + 20));
+            tooltipText.setPosition(Vector2f(mousePos.x + 25, mousePos.y + 25));
+            return;
+        }
+
+        if(isVisible == false) return;
+
+        std::vector<ItemObject>& equipment = playerInventory.getEquipment();
+
+        const auto& item = equipment[hoveredIndex].item;
+        tooltipText.setString(item.name + "\n" + item.description);
+        
+        sf::FloatRect bounds = tooltipText.getLocalBounds();
+        tooltipBackground.setSize(sf::Vector2f(bounds.size.x + 20, bounds.size.y + 20));
+        
+        tooltipBackground.setPosition(Vector2f(mousePos.x + 20, mousePos.y + 20));
+        tooltipText.setPosition(Vector2f(mousePos.x + 25, mousePos.y + 25));
+    }
+
+    void updateAlways(sf::RenderWindow& window) {
+        sf::Vector2f mousePos = window.mapPixelToCoords(sf::Mouse::getPosition(window));
+        hoveredIndex = -100;
+
+        // Check weapon slots hover
+        if (playerInventory.getFirstWeapon().item.type != ItemType::Null &&
+            playerInventory.getFirstWeapon().item.sprite.getGlobalBounds().contains(mousePos)) {
+            hoveredIndex = -1;
+        }
+
+        if (playerInventory.getSecondWeapon().item.type != ItemType::Null &&
+            playerInventory.getSecondWeapon().item.sprite.getGlobalBounds().contains(mousePos)) {
+            hoveredIndex = -2;
+        }
+
+        // Handle drop
+        if (sf::Mouse::isButtonPressed(sf::Mouse::Button::Left)) {
+            if (hoveredIndex == -1 && !removedItemOnClick) {
+                //dropWeapon(1);
+                removedItemOnClick = true;
+            }
+            else if (hoveredIndex == -2 && !removedItemOnClick) {
+                //dropWeapon(2);
+                removedItemOnClick = true;
+            }
+        } else {
+            removedItemOnClick = false;
+        }
+
+        if (hoveredIndex == -1 || hoveredIndex == -2)
+            updateTooltip(mousePos);
+    }
+
+    void onRemoveItem(int index) {
+        if(index == -1){
+            playerInventory.dropWeapon(1);
+        }
+        if(index == -2){
+            playerInventory.dropWeapon(2);
+        }
+        std::vector<ItemObject> equipment = playerInventory.getEquipment();
+        if(index >= 0 && index < static_cast<int>(equipment.size())) {
+            playerInventory.RemoveEquipment(index);
+            positionEquipmentSlots();
+            updateBackgroundSize();
+        }
+    }
+};
+
+sf::Font uiFont;
+int nearbyItemIndex;
+InventoryWindow inventoryWindow(uiFont);
+bool inventoryVisible = false;
+bool openedInventoryThisPress = false;
+bool pressedE = false;
 
 class SoundManager {
 private:
@@ -271,64 +744,6 @@ public:
 //         soundBuffers.clear();
 //     }
 // };
-
-class TextureManager {
-private:
-    map<std::string, sf::Texture> textures; // mapa pentru a stoca texturile incarcate
-    // contructor privat pentru a preveni instantierea directa 
-    // singleton pattern
-    TextureManager() {}
-
-public:
-    // bla bla bla singleton stuff
-    TextureManager(const TextureManager&) = delete;
-    TextureManager& operator=(const TextureManager&) = delete;
-
-    // instancea singletons
-    static TextureManager& getInstance() {
-        static TextureManager instance; // Instanta unica
-        return instance;
-    }
-
-    Texture& find(const std::string& name) {
-        std::string filename = "./res/" + name + ".png";
-        // verifica daca textura este deja incarcata
-        if (textures.find(filename) == textures.end()) {
-            Texture texture;
-            if (!texture.loadFromFile(filename)) {
-                cout << "Failed to load texture: " << filename << endl; 
-            }
-            textures[filename] = texture; // adauga textura in mapa
-        }
-        return textures[filename]; // returneaza textura incarcata
-    }
-
-    void justLoad(const std::string& name) {
-        std::string filename = "./res/" + name + ".png";
-        // verifica daca textura este deja incarcata
-        if (textures.find(filename) == textures.end()) {
-            Texture texture;
-            if (!texture.loadFromFile(filename)) {
-                cout << "Failed to load texture: " << filename << endl; 
-            }
-            textures[filename] = texture; // adauga textura in mapa
-            cout << "Loaded texture: " << filename << endl; // afiseaza mesaj de incarcare
-        }
-    }
-
-    void clear() {
-        textures.clear(); // sterge toate textele incarcate
-    }
-    // destructor
-    ~TextureManager() {
-        clear(); // sterge toate textele incarcate
-    }
-    // metoda pentru a verifica daca textura este incarcata
-    bool isLoaded(const std::string& name) {
-        std::string filename = "./res/" + name + ".png";
-        return textures.find(filename) != textures.end(); // verifica daca textura este incarcata
-    }
-};
 
 class Tile {
 private:
@@ -1196,7 +1611,6 @@ vector<Object> mapObjects;  // container pentru obiectele din harta
 vector<Tile> mapTiles;      // container pentru tile-urile din harta
 vector<Coin> mapCoins;     // container pentru monedele din harta
 vector<ExpOrb> mapExpOrbs; // container pentru orb-urile de exp din harta
-vector<ItemObject> worldItems;
 // inamici & entitati
 vector<EnemyGoblin> mapGoblins; // container pentru inamicii de tip goblin
 vector<EnemyBaphomet> mapBaphomets; // container pentru inamicii de tip Baphomet
@@ -1302,6 +1716,10 @@ void init() {
     // enemy baphomet
     TextureManager::getInstance().justLoad("Baphometset");
 
+    if (!uiFont.openFromFile("./res/PixelPurl.ttf")) { 
+            std::cerr << "Error loading font!\n";
+    }
+
     srand(time(NULL));  // initializeaza generatorul de numere aleatorii
     // adauga obiecte in containerul mapObjects
     mapObjects.push_back(Object(100, 150, 20, Color::Red));
@@ -1311,11 +1729,10 @@ void init() {
     mapObjects.push_back(Object(500, 300, 30, Color::Magenta));
     mapObjects.push_back(Object(600, 170, 40, Color::Cyan));
 
-    worldItems.push_back(ItemObject(Object(150, 150, 10, Color::Red), std::make_shared<Item>("Sword", ItemType::Weapon)));
-    worldItems.push_back(ItemObject(Object(250, 250, 10, Color::Cyan), std::make_shared<Item>("Dark Gloves", ItemType::Equipment)));
-    worldItems.push_back(ItemObject(Object(350, 350, 10, Color::Magenta), std::make_shared<Item>("Rare Gloves", ItemType::Equipment)));
-    worldItems.push_back(ItemObject(Object(450, 450, 10, Color::Yellow), std::make_shared<Item>("Gold Coin", ItemType::Coin, 10)));
-
+    worldItems.push_back(ItemObject(Object(150, 150, 10, Color::Red), Item("Sword", "basic ass sword", "weapon_basic_sword", ItemType::Weapon)));
+    worldItems.push_back(ItemObject(Object(250, 250, 10, Color::Cyan), Item("Dark Gloves", "Dark forces lie within these gloves", "weapon_basic_sword", ItemType::Equipment)));
+    worldItems.push_back(ItemObject(Object(350, 350, 10, Color::Magenta), Item("Rare Gloves", "gloves that are rare", "weapon_basic_sword", ItemType::Equipment)));
+    
     // init player pos
     playerX = 200;
     playerY = 300;
@@ -1407,17 +1824,51 @@ void update(RenderWindow& window) {
         obj.obj.x += playerVx;
     }
 
-    if (keysPressed[static_cast<int>(Keyboard::Key::E)]) {
-        for (auto& worldItem : worldItems) {
-            if (worldItem.pickedUp) continue;
-            float dist = distance(Vector2f(200, playerY), Vector2f(worldItem.obj.x, worldItem.obj.y));
-    
-            if (dist < pickupRadius) { // pickup radius
-                playerInventory.pickUp(worldItem.item);
-                worldItem.pickedUp = true;
-            }
+    nearbyItemIndex = -1;
+    float closestDistance = -1;
+
+    for (auto& worldItem : worldItems) {
+        if (worldItem.pickedUp) continue;
+        
+        sf::Vector2f itemPos(worldItem.obj.x, worldItem.obj.y);
+        float dist = distance(Vector2f(200, playerY), itemPos);
+        
+        if (dist < pickupRadius && (dist < closestDistance || closestDistance < 0)) {
+            closestDistance = dist;
+            nearbyItemIndex = static_cast<int>(&worldItem - &worldItems[0]);
         }
     }
+    // Handle pickup input
+    
+    if (keysPressed[static_cast<int>(Keyboard::Key::E)]) {
+        if (pressedE == false && nearbyItemIndex != -1 &&  worldItems[nearbyItemIndex].item.type != ItemType::Null) {
+            if(worldItems[nearbyItemIndex].pickedUp == false && inventoryWindow.onAddItem(worldItems[nearbyItemIndex])){
+                worldItems[nearbyItemIndex].pickedUp = true;
+                nearbyItemIndex = -1;
+            }
+        }
+        pressedE = true;
+    }
+    else
+    {
+        pressedE = false;
+    }
+
+    if(keysPressed[static_cast<int>(Keyboard::Key::I)]) {
+        if(openedInventoryThisPress == false)
+        {
+            inventoryVisible = !inventoryVisible;
+            inventoryWindow.isVisible = inventoryVisible;
+            openedInventoryThisPress = true;
+        }
+    }
+    else
+    {
+        openedInventoryThisPress = false;
+    }
+
+    inventoryWindow.updateAlways(window);
+    inventoryWindow.update(window, playerInventory);
 
     // move tiles but their x % 10 so they repeat
     for (Tile& tile : mapTiles) {
@@ -1528,6 +1979,42 @@ void drawPlayerAt(RenderWindow& window, float x, float y, float speed = 0, float
     sprite.setScale(Vector2f(scale, scale)); // seteaza scalarea sprite-ului
     sprite.setPosition(Vector2f(x, y)); // seteaza pozitia sprite-ului (folosim vector2f)
     window.draw(sprite); // deseneaza sprite-ul
+}
+
+void drawItemInfo(sf::RenderWindow& window) {
+    if(nearbyItemIndex == -1) return;
+    if (worldItems[nearbyItemIndex].item.type == ItemType::Null) return;
+
+    // Create text elements
+    sf::Text nameText(uiFont, "", 27);
+    sf::Text descText(uiFont, "", 27);
+    sf::RectangleShape underline(sf::Vector2f(200, 2));
+
+    // Configure name text
+    nameText.setFont(uiFont);
+    nameText.setString(worldItems[nearbyItemIndex].item.name);
+    nameText.setCharacterSize(24);
+    nameText.setFillColor(sf::Color::White);
+    nameText.setStyle(sf::Text::Bold);
+
+    // Configure description text
+    descText.setFont(uiFont);
+    descText.setString(worldItems[nearbyItemIndex].item.description);
+    descText.setCharacterSize(18);
+    descText.setFillColor(sf::Color(200, 200, 200));
+
+    // Position elements
+    sf::FloatRect nameBounds = nameText.getLocalBounds();
+    sf::Vector2f basePosition(400, 500);
+    
+    nameText.setPosition(basePosition);
+    underline.setPosition(Vector2f(basePosition.x, basePosition.y + nameBounds.size.y + 12));
+    descText.setPosition(Vector2f(basePosition.x, basePosition.y + nameBounds.size.y + 15));
+
+    // Draw elements
+    window.draw(nameText);
+    window.draw(underline);
+    window.draw(descText);
 }
 
 void drawPlayerWeapon(RenderWindow& window) {
