@@ -228,24 +228,14 @@ private:
 
 public:
 
-    Inventory() {
-        stackables.reserve(itemSlots);
-    }
+    Inventory() { stackables.reserve(itemSlots); }
 
-    std::vector<ItemObject>& getEquipment()
-    {
-        return stackables;
-    }
+    std::vector<ItemObject>& getEquipment() { return stackables; }
 
-    ItemObject getFirstWeapon()
-    {
-        return firstWeapon;
-    }
+    ItemObject getFirstWeapon() { return firstWeapon; }
 
-    ItemObject getSecondWeapon()
-    {
-        return secondWeapon;
-    }
+    ItemObject getSecondWeapon() { return secondWeapon; }
+
     //todo implementeaza inventar vizual
     bool pickUp(ItemObject itemobj) {
         std::cout << stackables.size() << "\n";
@@ -418,7 +408,7 @@ public:
 
     void draw(sf::RenderWindow& window) {
         //std:cout<<"test1";
-       if(!isVisible){
+        if(!isVisible){
 
             for(auto& slot : weaponSlots) window.draw(slot);
 
@@ -439,7 +429,7 @@ public:
                 window.draw(tooltipText);
             }
             return;
-       }
+        }
 
         // Center window
         sf::Vector2f center = window.getView().getCenter();
@@ -1464,13 +1454,13 @@ public:
     }
 
     // constructor cu circleshape
-   skillTreeNode(int cost, string description, CircleShape node, float x, float y) {
+    skillTreeNode(int cost, string description, CircleShape node, float x, float y) {
         this->cost = cost;
         this->description = description;
         this->node = node;
         this->x = node.getPosition().x;
         this->y = node.getPosition().y;
-   }
+    }
 
     // constructor pentru date principale
     skillTreeNode(int maxAlloc,int cost, int levelReq, string description, float x, float y) {
@@ -1554,14 +1544,14 @@ public:
 
     // setters
     void setActive(bool active) {
-       this->active = active;
+        this->active = active;
     }
 
     void setPosition(float x, float y) {
         this->node.setPosition(Vector2f(x,y));
         this->x = node.getPosition().x;
         this->y = node.getPosition().y;
-   }
+    }
 
     void setCurrentAlloc(int currentAlloc) {
         this->currentAlloc = currentAlloc;
@@ -1569,15 +1559,15 @@ public:
 
     // getters
     bool getActive() {
-       return active;
-   }
+        return active;
+    }
 
     float getX() {
-       return x;
-   }
+        return x;
+    }
 
     float getY() {
-       return y;
+        return y;
     }
 
     CircleShape getNode() {
