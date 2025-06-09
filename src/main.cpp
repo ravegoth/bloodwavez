@@ -1729,7 +1729,7 @@ void init() {
     mapObjects.push_back(Object(500, 300, 30, Color::Magenta));
     mapObjects.push_back(Object(600, 170, 40, Color::Cyan));
 
-    worldItems.push_back(ItemObject(Object(150, 150, 10, Color::Red), Item("Sword", "basic ass sword", "weapon_basic_sword", ItemType::Weapon)));
+    worldItems.push_back(ItemObject(Object(150, 150, 10, Color::Red), Item("Sword", "Basic sword", "weapon_basic_sword", ItemType::Weapon)));
     worldItems.push_back(ItemObject(Object(250, 250, 10, Color::Cyan), Item("Dark Gloves", "Dark forces lie within these gloves", "weapon_basic_sword", ItemType::Equipment)));
     worldItems.push_back(ItemObject(Object(350, 350, 10, Color::Magenta), Item("Rare Gloves", "gloves that are rare", "weapon_basic_sword", ItemType::Equipment)));
     
@@ -1982,36 +1982,39 @@ void drawPlayerAt(RenderWindow& window, float x, float y, float speed = 0, float
 }
 
 void drawItemInfo(sf::RenderWindow& window) {
-    if(nearbyItemIndex == -1) return;
+    if (nearbyItemIndex == -1) return;
     if (worldItems[nearbyItemIndex].item.type == ItemType::Null) return;
 
-    // Create text elements
-    sf::Text nameText(uiFont, "", 27);
-    sf::Text descText(uiFont, "", 27);
-    sf::RectangleShape underline(sf::Vector2f(200, 2));
+    const std::string& itemName = worldItems[nearbyItemIndex].item.name;
+    const std::string& itemDesc = worldItems[nearbyItemIndex].item.description;
 
-    // Configure name text
-    nameText.setFont(uiFont);
-    nameText.setString(worldItems[nearbyItemIndex].item.name);
-    nameText.setCharacterSize(24);
+    sf::Text nameText(uiFont, itemName, 24);
     nameText.setFillColor(sf::Color::White);
     nameText.setStyle(sf::Text::Bold);
 
-    // Configure description text
-    descText.setFont(uiFont);
-    descText.setString(worldItems[nearbyItemIndex].item.description);
-    descText.setCharacterSize(18);
+    sf::Text descText(uiFont, itemDesc, 18);
     descText.setFillColor(sf::Color(200, 200, 200));
 
-    // Position elements
     sf::FloatRect nameBounds = nameText.getLocalBounds();
-    sf::Vector2f basePosition(400, 500);
-    
-    nameText.setPosition(basePosition);
-    underline.setPosition(Vector2f(basePosition.x, basePosition.y + nameBounds.size.y + 12));
-    descText.setPosition(Vector2f(basePosition.x, basePosition.y + nameBounds.size.y + 15));
+    sf::FloatRect descBounds = descText.getLocalBounds();
 
-    // Draw elements
+    sf::Vector2f basePosition(worldItems[nearbyItemIndex].obj.x + 20,
+                            worldItems[nearbyItemIndex].obj.y - 40);
+
+    nameText.setPosition(basePosition);
+    sf::RectangleShape underline(sf::Vector2f(nameBounds.size.x+ 10, 2));
+    underline.setFillColor(sf::Color::White);
+    underline.setPosition(sf::Vector2f(basePosition.x, basePosition.y + nameBounds.size.y + 10));
+    descText.setPosition(sf::Vector2f(basePosition.x, basePosition.y + nameBounds.size.y + 10));
+
+    float backgroundWidth = std::max(nameBounds.size.x, descBounds.size.x) + 20;
+    float backgroundHeight = nameBounds.size.y + descBounds.size.y + 40;
+
+    sf::RectangleShape background(sf::Vector2f(backgroundWidth, backgroundHeight));
+    background.setFillColor(sf::Color(0, 0, 0, 180));
+    background.setPosition(sf::Vector2f(basePosition.x - 10, basePosition.y - 10));
+
+    window.draw(background);
     window.draw(nameText);
     window.draw(underline);
     window.draw(descText);
