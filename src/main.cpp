@@ -13,6 +13,7 @@
 #include <tlhelp32.h>         // pentru operatii pe procese si thread-uri in windows
 
 // ------ alte fisiere
+#include "ai.h"
 
 // -------------------------------------------------------------------- sfml --------------------------------------------------------------------
 #include <SFML/Graphics.hpp>  // pentru grafica (desenare forme, sprites, etc.)
@@ -32,6 +33,13 @@ using namespace sf;
 const int FPS_LIMIT = 60;           // limita de cadre pe secunda
 const int SPEED_LIMIT = 4;          // 3px/sec
 const bool RELEASE = false;         // flag pentru release (true = release, false = debug)
+
+constexpr int INVENTORY_WIDTH = 600;
+constexpr float INVENTORY_HEIGHT = 400;
+constexpr int SLOT_SIZE = 64;
+constexpr int PADDING = 10;
+constexpr int COLUMNS = 6;
+
 unsigned int frameCount = 0;
 
 // -------------------------------------------------------------------- functii utilitare --------------------------------------------------------------------
@@ -81,6 +89,7 @@ int xp = 0; // xp-ul jucatorului
 int level = 1; // starting level
 int levelXP = 100; // xp-ul necesar pentru a urca la nivelul urmator
 int skillPoints = 0;
+unsigned long long levelProgress = 0; // progresul la singurul nivel
 
 int playerHealth = 100; // viata jucatorului
 int playerMaxHealth = 100; // viata maxima a jucatorului
@@ -90,6 +99,13 @@ float playerDamageMultiplier = 1; // muliplicatorul de damage al jucatorului car
 float totalDamageIncrease=0; // totalul de %damage increase al jucatorului
 
 bool skillTreeDown = true; // folosit pt schimbarea intre playerView si skillTreeView
+
+// folosit pt inventar si pickuping
+sf::Font uiFont;
+int nearbyItemIndex;
+bool inventoryVisible = false;
+bool openedInventoryThisPress = false;
+bool pressedE = false;
 
 // ---------------------------------------------------- functii folosite de obiecte (forward decl) -----------------------------------------------------------
 
@@ -105,6 +121,7 @@ public:
     float x, y;       // coordonatele obiectului
     float radius;     // raza obiectului (pentru desenare)
     Color color;      // culoarea obiectului
+    // bool hasTexture = false; // flag pentru a verifica daca obiectul are textura
     // constructor
     Object(float x, float y, float radius, Color color) : x(x), y(y), radius(radius), color(color) {}
     
@@ -114,6 +131,10 @@ public:
         circle.setFillColor(color);                  // seteaza culoarea
         circle.setPosition(Vector2f(x, y));          // seteaza pozitia (folosim vector2f)
         window.draw(circle);                         // deseneaza cercul
+    }
+
+    ~Object() {
+        // destructor
     }
 };
 
@@ -175,12 +196,6 @@ public:
     }
 };
 
-constexpr int INVENTORY_WIDTH = 600;
-constexpr float INVENTORY_HEIGHT = 400;
-constexpr int SLOT_SIZE = 64;
-constexpr int PADDING = 10;
-constexpr int COLUMNS = 6;
-
 enum class ItemType {
     Weapon,
     Equipment,
@@ -202,18 +217,39 @@ struct Item {
             SLOT_SIZE / static_cast<float>(texture.getSize().x),
             SLOT_SIZE / static_cast<float>(texture.getSize().y)
         ));
-        }
+    }
+
+    ~Item() {
+        // destructor
+        // nu este necesar sa facem nimic aici, deoarece sprite-ul este gestionat de TextureManager
+    }
 };
 
 struct ItemObject {
-    Object obj;
+    double x, y; // coordonatele obiectului
+    double radius; // raza obiectului
     Item item;
     bool pickedUp = false;
+    string textureName;
 
-    ItemObject(Object obj, Item item) : obj(obj), item(item) {}
-    ItemObject() : obj(Object(350, 350, 10, Color::Magenta)), 
-    item(Item("Null", "", "weapon_basic_sword", ItemType::Null)),
-    pickedUp(true) {};
+    ItemObject(double x, double y, double radius, Item item) : x(x), y(y), radius(radius), item(item), pickedUp(false) {}
+    ItemObject() : x(0), y(0), radius(0), item("", "", "", ItemType::Null), textureName(""),  pickedUp(true) {};
+
+    // metoda pentru desenarea obiectului in fereastra
+    void draw(RenderWindow& window) {
+        if (item.type == ItemType::Null) return; // nu desena daca item-ul este null
+
+        sf::Texture& texture = TextureManager::getInstance().find(item.texturePath);
+        sf::Sprite sprite(texture);
+        sprite.setScale(sf::Vector2f(40.0f / texture.getSize().x, 40.0f / texture.getSize().y));
+        sprite.setPosition(sf::Vector2f(static_cast<float>(x), static_cast<float>(y)));
+        window.draw(sprite);
+    }
+
+    ~ItemObject() {
+        // destructor
+        // nu este necesar sa facem nimic aici, deoarece item-ul si obiectul sunt gestionate de alte clase
+    }
 };
 
 vector<ItemObject> worldItems;
@@ -227,7 +263,6 @@ private:
     int currentlyOccupied = 0;
 
 public:
-
     Inventory() { stackables.reserve(itemSlots); }
 
     std::vector<ItemObject>& getEquipment() { return stackables; }
@@ -270,14 +305,14 @@ public:
         return false;
     }
 
-    void RemoveEquipment(int index)
+    void removeEquipment(int index)
     {
         if(index >= 0 && index < static_cast<int>(stackables.size())) {
             ItemObject removedItem = stackables[index];
 
             removedItem.pickedUp = false;
-            removedItem.obj.x = rand_uniform(190, 210);
-            removedItem.obj.y = rand_uniform(playerY - 10, playerY + 10);
+            removedItem.x = rand_uniform(190, 210);
+            removedItem.y = rand_uniform(playerY - 10, playerY + 10);
 
             worldItems.push_back(removedItem);
             
@@ -292,22 +327,24 @@ public:
         if (slot == 1 && firstWeapon.item.type != ItemType::Null) {
             dropped = firstWeapon;
             dropped.pickedUp = false;
-            dropped.obj.x = rand_uniform(190, 210);
-            dropped.obj.y = rand_uniform(playerY - 10, playerY + 10);
+            dropped.x = rand_uniform(190, 210);
+            dropped.y = rand_uniform(playerY - 10, playerY + 10);
             firstWeapon = ItemObject(); // reset to null
         }
         else if (slot == 2 && secondWeapon.item.type != ItemType::Null) {
             dropped = secondWeapon;
             dropped.pickedUp = false;
-            dropped.obj.x = rand_uniform(190, 210);
-            dropped.obj.y = rand_uniform(playerY - 10, playerY + 10);
+            dropped.x = rand_uniform(190, 210);
+            dropped.y = rand_uniform(playerY - 10, playerY + 10);
             secondWeapon = ItemObject(); // reset to null
         }
         worldItems.push_back(dropped);
     }
 
-
-
+    ~Inventory() {
+        // destructor
+        // nu este necesar sa facem nimic aici, deoarece item-urile si obiectele sunt gestionate de alte clase
+    }
 };
 
 Inventory playerInventory;
@@ -577,19 +614,14 @@ public:
         }
         std::vector<ItemObject> equipment = playerInventory.getEquipment();
         if(index >= 0 && index < static_cast<int>(equipment.size())) {
-            playerInventory.RemoveEquipment(index);
+            playerInventory.removeEquipment(index);
             positionEquipmentSlots();
             updateBackgroundSize();
         }
     }
 };
 
-sf::Font uiFont;
-int nearbyItemIndex;
 InventoryWindow inventoryWindow(uiFont);
-bool inventoryVisible = false;
-bool openedInventoryThisPress = false;
-bool pressedE = false;
 
 class SoundManager {
 private:
@@ -820,6 +852,11 @@ public:
     void setHeight(float height) { this->height = height; } // setter pentru height
     void setColor(Color color) { this->color = color; } // setter pentru culoare
     void setType(string type) { this->type = type; } // setter pentru tip
+
+    ~Tile() {
+        // destructor
+        // nu este necesar sa facem nimic aici, deoarece culoarea si tipul sunt gestionate de alte clase
+    }
 };
 
 
@@ -920,9 +957,16 @@ public:
     }
 
     virtual void draw(RenderWindow& window) {   };
+
+    ~Enemy() {
+        // destructor
+        // nu este necesar sa facem nimic aici, deoarece inamicul este gestionat de alte clase
+    }
 };
 
 class EnemyGoblin : public Enemy {
+private:
+    EnemyBrain ai; // AI for the goblin
 public:
     EnemyGoblin(float x, float y, int health, int damage, bool isMelee)
         : Enemy(x, y, health, damage, isMelee) {
@@ -950,6 +994,8 @@ public:
         this->enemyHeight = 50; // Height of the goblin
         this->enemyWidth = 30; // Width of the goblin
         attackRadius = 40;
+
+        EnemyBrain ai;
     }
 
     void draw(RenderWindow& window) override {
@@ -1105,10 +1151,39 @@ public:
 
         x += playerVx; // apply player velocity to x position
         // y += playerVy; // apply player velocity to y position
+
+        // ai movement
+        angleToPlayer = atan2(playerY - y, 200 - x); // calculate angle to player (from 0 to 360)
+        float angleDeg = angleToPlayer * 180 / M_PI;
+        angleDeg = fmod(angleDeg + 360, 360); // normalize to [0, 360)
+        auto aiResult = ai.result(playerHealth / playerMaxHealth, x, y, 200, playerY, angleDeg);
+        // aiResult[0]: move towards (1) or away (0), aiResult[1]: angle in degrees
+        bool moveTowardsPlayer = (aiResult[0] > 0.5);
+        float moveAngle = aiResult[1] * M_PI / 180; // convert to radians
+        if (moveTowardsPlayer) {
+            vx += speed * cos(moveAngle) * 0.9f;
+            vy += speed * sin(moveAngle) * 0.9f;
+        } else {
+            // vx -= speed * cos(moveAngle) * 0.6f;
+            // vy -= speed * sin(moveAngle) * 0.6f;
+        }
+
+        // keep it within bounds
+        // keep goblin within bounds
+        if (x < 0) { x = 0; vx += 1; }
+        if (x > 800) { x = 800; vx -= 1; }
+        if (y < 0) { y = 0; vy += 1; }
+        if (y > 600) { y = 600; vy -= 1; }
+    }
+
+    ~EnemyGoblin() {
+        // destructor
     }
 };
 
 class EnemyBaphomet : public Enemy {
+private:
+    EnemyBrain ai; // AI for Baphomet
 public:
     EnemyBaphomet(float x, float y)
         : Enemy(x, y, /*health*/ 0, /*damage*/ 0, /*isMelee*/ true) {
@@ -1133,6 +1208,7 @@ public:
         this->x = x;
         this->y = y;
         vx = vy = 0;
+        EnemyBrain ai = EnemyBrain(); // ai
     }
 
     void draw(RenderWindow& window) override {
@@ -1242,6 +1318,35 @@ public:
         // apply movement
         x += vx * 0.8f + playerVx;
         y += vy * 0.8f;
+
+        // move based on AI
+        auto angleToPlayer = atan2(playerY - y, 200 - x); // calculate angle to player (from 0 to 360)
+        angleToPlayer *= 180 / M_PI; // convert to degrees
+        angleToPlayer = fmod(angleToPlayer + 360, 360); // normalize to [0, 360)
+        auto aiResult = ai.result(playerHealth / playerMaxHealth, x, y, 200, playerY, angleToPlayer);
+        cout << "querying: " << playerHealth / playerMaxHealth << ", " << x << ", " << y << ", " << 200 << ", " << playerY << ", " << angleToPlayer << " result: " << aiResult[0] << ", " << aiResult[1] << endl;
+        // o sa rezulte: aiResult[0] = 1 sau 0, 1 = te misti spre player, 0, nu si aiResult[1] = unghiul la care sa se miste
+        auto moveTowardsPlayer = (aiResult[0] > 0.5);
+        auto moveAngle = aiResult[1] * M_PI / 180; // convert to radians
+        if (moveTowardsPlayer) {
+            // move towards player
+            vx += speed * cos(moveAngle);
+            vy += speed * sin(moveAngle);
+        } else {
+            // move away from player
+            vx -= speed * cos(moveAngle);
+            vy -= speed * sin(moveAngle);
+        }
+
+        // if baphomet out of bounds, push it back
+        if (x < 0) x = 0, vx += 1;
+        if (x > 800) x = 800, vx -= 1;
+        if (y < 0) y = 0, vy += 1;
+        if (y > 600) y = 600, vy -= 1;
+    }
+
+    ~EnemyBaphomet() {
+        // destructor
     }
 };
 
@@ -1338,6 +1443,10 @@ public:
     // getters setters deletion
     bool isToBeDeleted() const { return toBeDeleted; } // getter pentru flag-ul de autodistrugere
     void setToBeDeleted(bool toBeDeleted) { this->toBeDeleted = toBeDeleted; } // setter pentru flag-ul de autodistrugere
+
+    ~Coin() {
+        // destructor
+    }
 };
 
 // clasa de exp
@@ -1695,6 +1804,9 @@ void init() {
     TextureManager::getInstance().justLoad("Playerset");
     // weapon textures
     TextureManager::getInstance().justLoad("weapon_basic_sword");
+    TextureManager::getInstance().justLoad("weapon_basic_bow");
+    // equipment textures
+    TextureManager::getInstance().justLoad("equipment_purple_gloves");
     // coin textures
     TextureManager::getInstance().justLoad("Coinset");
     // exp textures
@@ -1712,16 +1824,17 @@ void init() {
 
     srand(time(NULL));  // initializeaza generatorul de numere aleatorii
     // adauga obiecte in containerul mapObjects
-    mapObjects.push_back(Object(100, 150, 20, Color::Red));
-    mapObjects.push_back(Object(200, 210, 30, Color::Blue));
-    mapObjects.push_back(Object(300, 350, 20, Color::Green));
-    mapObjects.push_back(Object(400, 480, 50, Color::Yellow));
-    mapObjects.push_back(Object(500, 300, 30, Color::Magenta));
-    mapObjects.push_back(Object(600, 170, 40, Color::Cyan));
+    // DEBUG ONLY
+    // mapObjects.push_back(Object(100, 150, 20, Color::Red));
+    // mapObjects.push_back(Object(200, 210, 30, Color::Blue));
+    // mapObjects.push_back(Object(300, 350, 20, Color::Green));
+    // mapObjects.push_back(Object(400, 480, 50, Color::Yellow));
+    // mapObjects.push_back(Object(500, 300, 30, Color::Magenta));
+    // mapObjects.push_back(Object(600, 170, 40, Color::Cyan));
 
-    worldItems.push_back(ItemObject(Object(150, 150, 10, Color::Red), Item("Sword", "Basic sword", "weapon_basic_sword", ItemType::Weapon)));
-    worldItems.push_back(ItemObject(Object(250, 250, 10, Color::Cyan), Item("Dark Gloves", "Dark forces lie within these gloves", "weapon_basic_sword", ItemType::Equipment)));
-    worldItems.push_back(ItemObject(Object(350, 350, 10, Color::Magenta), Item("Rare Gloves", "gloves that are rare", "weapon_basic_sword", ItemType::Equipment)));
+    worldItems.push_back(ItemObject(150, 150, 10, Item("Sword", "Basic sword", "weapon_basic_sword", ItemType::Weapon)));
+    worldItems.push_back(ItemObject(150, 180, 10, Item("Bow", "Basic bow", "weapon_basic_bow", ItemType::Weapon)));
+    worldItems.push_back(ItemObject(250, 250, 10, Item("Puple Gloves", "Puple forces lie within these gloves", "equipment_purple_gloves", ItemType::Equipment)));
     
     // init player pos
     playerX = 200;
@@ -1811,7 +1924,7 @@ void update(RenderWindow& window) {
         if(obj.pickedUp) {
             continue;
         }
-        obj.obj.x += playerVx;
+        obj.x += playerVx;
     }
 
     nearbyItemIndex = -1;
@@ -1820,7 +1933,7 @@ void update(RenderWindow& window) {
     for (auto& worldItem : worldItems) {
         if (worldItem.pickedUp) continue;
         
-        sf::Vector2f itemPos(worldItem.obj.x, worldItem.obj.y);
+        sf::Vector2f itemPos(worldItem.x, worldItem.y);
         float dist = distance(Vector2f(200, playerY), itemPos);
         
         if (dist < pickupRadius && (dist < closestDistance || closestDistance < 0)) {
@@ -1988,8 +2101,8 @@ void drawItemInfo(sf::RenderWindow& window) {
     sf::FloatRect nameBounds = nameText.getLocalBounds();
     sf::FloatRect descBounds = descText.getLocalBounds();
 
-    sf::Vector2f basePosition(worldItems[nearbyItemIndex].obj.x + 20,
-                            worldItems[nearbyItemIndex].obj.y - 40);
+    sf::Vector2f basePosition(worldItems[nearbyItemIndex].x + 20,
+                            worldItems[nearbyItemIndex].y - 40);
 
     nameText.setPosition(basePosition);
     sf::RectangleShape underline(sf::Vector2f(nameBounds.size.x+ 10, 2));
@@ -2042,7 +2155,6 @@ void drawPlayerWeapon(RenderWindow& window) {
         swordHitbox2 = Vector2f(handX - cos(angle / 180 * 3.14f + 3.14f/2.0f) * 37, playerY - sin(angle / 180 * 3.14f + 3.14f/2.0f) * 37); // seteaza pozitia hitbox-ului sabiei (folosim vector2f)
     }
 }
-
 void drawCoins(RenderWindow& window) {
     for (Coin& coin : mapCoins) {
         coin.update(); // actualizeaza moneda
@@ -2308,6 +2420,13 @@ void drawSkillTree(RenderWindow& window) {
     //cout<<playerDamageMultiplier<<endl;
 }
 
+void drawWorldItems(RenderWindow& window) {
+    for (auto& worldItem : worldItems) {
+        if (worldItem.pickedUp) continue; // skip if item is picked up
+        worldItem.draw(window); // deseneaza obiectul din lume
+    }
+}
+
 void draw(RenderWindow& window) {
     // deseneaza fiecare tile din vectorul mapTiles
     for (Tile& tile : mapTiles) {
@@ -2324,12 +2443,7 @@ void draw(RenderWindow& window) {
         obj.draw(window);
     }
 
-    // deseneaza fiecare obiect din vectorul worldItems
-    for (auto& worldItem : worldItems) {
-        if (!worldItem.pickedUp) {
-            worldItem.obj.draw(window);
-        }
-    }
+    drawWorldItems(window); // desenare obiecte din lume
 
     drawEnemies(window); // desenare inamici
 
