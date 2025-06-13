@@ -353,6 +353,8 @@ public:
 
 Inventory playerInventory;
 
+
+// clasa pentru interfata inventarului
 class InventoryWindow {
 private:
     sf::RectangleShape background;
@@ -360,6 +362,8 @@ private:
     std::vector<sf::RectangleShape> weaponSlots;
     sf::Font font;
     sf::Text tooltipText;
+    sf::Text equipmentText;
+    sf::Text weaponText;
     sf::RectangleShape tooltipBackground;
     int hoveredIndex = -1;
     bool removedItemOnClick = false;
@@ -367,122 +371,130 @@ private:
 public:
     bool isVisible = false;
 
+    // updateaza dimensiunea fundalului inventarului in functie de numarul de iteme
     void updateBackgroundSize() {
-        std::vector<ItemObject>& equipment = playerInventory.getEquipment();
-        int rows = static_cast<int>(std::ceil(equipment.size() / static_cast<float>(COLUMNS)));
-        int extraHeight = rows * (SLOT_SIZE + PADDING);
-        int dynamicHeight = 50 + extraHeight + PADDING;
+        // std::vector<ItemObject>& equipment = playerInventory.getEquipment();
+        // int rows = static_cast<int>(std::ceil(equipment.size() / static_cast<float>(COLUMNS)));
+        // int extraHeight = rows * (SLOT_SIZE + PADDING);
+        // int dynamicHeight = 90 + extraHeight;
 
-        background.setSize(sf::Vector2f(INVENTORY_WIDTH, max(50.f, static_cast<float>(dynamicHeight))));
+        // background.setSize(sf::Vector2f(INVENTORY_WIDTH, std::max(150.f, static_cast<float>(dynamicHeight))));
+
+        std::vector<ItemObject>& equipment = playerInventory.getEquipment();
+        int rows = 3;
+        int extraHeight = rows * (SLOT_SIZE + PADDING);
+        int dynamicHeight = 90 + extraHeight;
+
+        background.setSize(sf::Vector2f(INVENTORY_WIDTH, std::max(150.f, static_cast<float>(dynamicHeight))));
     }
 
-    InventoryWindow(sf::Font& font): titleText(font, "", 27), tooltipText(font, "", 27){
-        
+    // constructor
+    InventoryWindow(sf::Font& font) :
+            tooltipText(font, "Tooltip", 14), equipmentText(font, "Equipment", 18),
+            weaponText(font, "Weapon", 18), titleText(font, "Inventory", 24) {
         this->font = font;
 
         background.setSize(sf::Vector2f(INVENTORY_WIDTH, INVENTORY_HEIGHT));
-        background.setFillColor(sf::Color(30, 30, 30, 220));
+        background.setFillColor(sf::Color(20, 20, 20, 200));
         background.setOutlineThickness(2);
-        background.setOutlineColor(sf::Color::White);
+        background.setOutlineColor(sf::Color(100, 100, 255));
 
-        // Initialize weapon slots
-        for(int i = 0; i < 2; i++) {
+        for (int i = 0; i < 2; i++) {
             sf::RectangleShape slot(sf::Vector2f(SLOT_SIZE, SLOT_SIZE));
-            slot.setPosition(Vector2f(PADDING + i * (SLOT_SIZE + PADDING), 520));
             slot.setFillColor(sf::Color(80, 80, 80));
             slot.setOutlineThickness(1);
             slot.setOutlineColor(sf::Color::White);
             weaponSlots.push_back(slot);
         }
 
-        sf::Text titleText(font, "", 27);
         titleText.setFont(font);
         titleText.setString("Inventory");
         titleText.setCharacterSize(24);
-        titleText.setPosition(Vector2f(PADDING, PADDING));
 
-        tooltipBackground.setFillColor(sf::Color(0, 0, 0, 200));
+        tooltipBackground.setFillColor(sf::Color(0, 0, 0, 220));
         tooltipText.setFont(font);
-        tooltipText.setCharacterSize(16);
+        tooltipText.setCharacterSize(14);
+        tooltipText.setStyle(sf::Text::Regular | sf::Text::Italic);
 
         updateBackgroundSize();
     }
 
-    void update(sf::RenderWindow& window, Inventory& inventory) {
-
-        sf::Vector2f mousePos = window.mapPixelToCoords(sf::Mouse::getPosition(window));
-        hoveredIndex = -100;
-        
-        std::vector<ItemObject>& equipment = playerInventory.getEquipment();
-        
-        // Check equipment hover
-        for(size_t i = 0; i < equipment.size(); i++) {
-            if(equipment[i].item.sprite.getGlobalBounds().contains(mousePos)) {
-                hoveredIndex = static_cast<int>(i);
-                break;
-            }
-        }
-
-        if(weaponSlots[0].getGlobalBounds().contains(mousePos)) {
-            hoveredIndex = static_cast<int>(-1);
-        }
-
-        if(weaponSlots[1].getGlobalBounds().contains(mousePos)) {
-            hoveredIndex = static_cast<int>(-2);
-        }
-
-        // Handle click to drop
-        if(sf::Mouse::isButtonPressed(sf::Mouse::Button::Left)) {
-            if(hoveredIndex != -100 && removedItemOnClick == false) {
-                //inventory.removeItem(hoveredIndex);
-                onRemoveItem(hoveredIndex);
-                removedItemOnClick = true; // avoid removing multiple items in 1 click
-            }
-        }
-        else
-        {
-            removedItemOnClick = false;
-        }
-
-        updateTooltip(mousePos);
-    }
-
+    // deseneaza tot inventarul
     void draw(sf::RenderWindow& window) {
-        //std:cout<<"test1";
-        if(!isVisible){
-
-            for(auto& slot : weaponSlots) window.draw(slot);
+        // if not visible, just draw in the bottom left corner the two main weapons
+        // (+ their tooltip)
+        if (!isVisible) {
+            for (int i = 0; i < 2; ++i) {
+                weaponSlots[i].setPosition(Vector2f(10 + i * (SLOT_SIZE + PADDING), window.getSize().y - SLOT_SIZE - 10));
+                if (hoveredIndex == -1 && i == 0) {
+                    weaponSlots[i].setFillColor(sf::Color(50, 50, 50)); // Darker background
+                    weaponSlots[i].setOutlineColor(sf::Color::Cyan);   // Lighter border
+                } else if (hoveredIndex == -2 && i == 1) {
+                    weaponSlots[i].setFillColor(sf::Color(50, 50, 50)); // Darker background
+                    weaponSlots[i].setOutlineColor(sf::Color::Cyan);   // Lighter border
+                } else {
+                    weaponSlots[i].setFillColor(sf::Color(80, 80, 80)); // Default background
+                    weaponSlots[i].setOutlineColor(sf::Color::White);  // Default border
+                }
+                window.draw(weaponSlots[i]);
+            }
 
             if (playerInventory.getFirstWeapon().item.type != ItemType::Null) {
                 Sprite s = playerInventory.getFirstWeapon().item.sprite;
+                s.setOrigin(Vector2f(0, 0));
+                s.setRotation(sf::degrees(0)); // Reset rotation
                 s.setPosition(weaponSlots[0].getPosition());
                 window.draw(s);
             }
 
             if (playerInventory.getSecondWeapon().item.type != ItemType::Null) {
                 Sprite s = playerInventory.getSecondWeapon().item.sprite;
+                s.setOrigin(Vector2f(0, 0));
+                s.setRotation(sf::degrees(0)); // Reset rotation
                 s.setPosition(weaponSlots[1].getPosition());
                 window.draw(s);
             }
 
-            if(hoveredIndex != -100) {
+            if (hoveredIndex == -1 || hoveredIndex == -2) {
+                sf::Text shadow = tooltipText;
+                shadow.setFillColor(sf::Color::Black);
+                shadow.setPosition(tooltipText.getPosition() + Vector2f(1, 1));
+
                 window.draw(tooltipBackground);
-                window.draw(tooltipText);
+                window.draw(shadow);
             }
             return;
         }
 
-        // Center window
-        sf::Vector2f center = window.getView().getCenter();
-        background.setPosition(Vector2f(center.x - INVENTORY_WIDTH/2, center.y - INVENTORY_HEIGHT/2));
+        if (!isVisible) return;
 
-        positionEquipmentSlots();
+        sf::Vector2f center = window.getView().getCenter();
+        background.setPosition(Vector2f(center.x - INVENTORY_WIDTH / 2, center.y - INVENTORY_HEIGHT / 2));
 
         window.draw(background);
+        
+        titleText.setPosition(background.getPosition() + Vector2f(PADDING, 5));
         window.draw(titleText);
+        
+        window.draw(tooltipText);
+        
+        // weaponText should be under the title at the top with proper spacing
+        weaponText.setPosition(background.getPosition() + Vector2f(PADDING, 30));
+        window.draw(weaponText);
+        // equipmentText should be under the weaponText with proper spacing
+        equipmentText.setPosition(background.getPosition() + Vector2f(PADDING, 44));
+        window.draw(equipmentText);
 
-        for(auto& slot : weaponSlots) window.draw(slot);
+        // plaseaza sloturile de arme deasupra
+        for (int i = 0; i < 2; ++i) {
+            weaponSlots[i].setPosition(background.getPosition() + Vector2f(INVENTORY_WIDTH - (2 - i) * (SLOT_SIZE + PADDING), 40));
+        }
 
+        for (auto& slot : weaponSlots) {
+            window.draw(slot);
+        }
+
+        // deseneaza armele echipate
         if (playerInventory.getFirstWeapon().item.type != ItemType::Null) {
             Sprite s = playerInventory.getFirstWeapon().item.sprite;
             s.setPosition(weaponSlots[0].getPosition());
@@ -494,145 +506,157 @@ public:
             s.setPosition(weaponSlots[1].getPosition());
             window.draw(s);
         }
-        
-        std::vector<ItemObject>& equipment = playerInventory.getEquipment();
-        // Draw equipment items
-        for(auto& itemobj : equipment) {
-            window.draw(itemobj.item.sprite);
-        }
 
-        // Draw tooltip
-        if(hoveredIndex != -100) {
+        // deseneaza sloturile de echipament
+        drawEquipmentGrid(window);
+
+        if (hoveredIndex != -100) {
+            sf::Text shadow = tooltipText;
+            shadow.setFillColor(sf::Color::Black);
+            shadow.setPosition(tooltipText.getPosition() + Vector2f(1, 1));
+
             window.draw(tooltipBackground);
+            window.draw(shadow);
             window.draw(tooltipText);
         }
     }
 
-    bool onAddItem(ItemObject item) {
-        if(playerInventory.pickUp(item) == false) return false;
-        positionEquipmentSlots();
-        updateBackgroundSize();
-        return true;
-    }
-
-    void positionEquipmentSlots() {
+    // deseneaza sloturile + itemele din grid-ul de echipamente
+    void drawEquipmentGrid(sf::RenderWindow& window) {
         sf::Vector2f bgPos = background.getPosition();
         const float startX = bgPos.x + PADDING;
-        const float startY = bgPos.y + 50;
+        const float startY = bgPos.y + 90;
 
         std::vector<ItemObject>& equipment = playerInventory.getEquipment();
 
-        for(size_t i = 0; i < equipment.size(); i++) {
-            //std::cout<<equipment[i].item.name + "\n";
+        int maxSlots = 16;
+        for (int i = 0; i < maxSlots; ++i) {
             int col = i % COLUMNS;
             int row = i / COLUMNS;
-            sf::Vector2f pos(
-                startX + col * (SLOT_SIZE + PADDING),
-                startY + row * (SLOT_SIZE + PADDING)
-            );
+            sf::Vector2f pos(startX + col * (SLOT_SIZE + PADDING), startY + row * (SLOT_SIZE + PADDING));
+
+            sf::RectangleShape slot(sf::Vector2f(SLOT_SIZE, SLOT_SIZE));
+            slot.setPosition(pos);
+            slot.setFillColor(sf::Color(50, 50, 50, 150));
+            slot.setOutlineThickness(1);
+
+            if (i == hoveredIndex)
+                slot.setOutlineColor(sf::Color::Cyan);
+            else
+                slot.setOutlineColor(sf::Color::White);
+
+            window.draw(slot);
+        }
+
+        for (size_t i = 0; i < equipment.size(); ++i) {
+            int col = i % COLUMNS;
+            int row = i / COLUMNS;
+            sf::Vector2f pos(startX + col * (SLOT_SIZE + PADDING), startY + row * (SLOT_SIZE + PADDING));
+
             equipment[i].item.position = pos;
             equipment[i].item.sprite.setPosition(pos);
+            window.draw(equipment[i].item.sprite);
         }
     }
 
+    // updateaza tooltip-ul cand mouse-ul e deasupra unui slot
     void updateTooltip(sf::Vector2f mousePos) {
-        if(hoveredIndex == -100) return;
-
-        if(hoveredIndex == -1) {
-            const auto& item = playerInventory.getFirstWeapon().item;
+        const auto setTooltip = [&](const Item& item) {
             tooltipText.setString(item.name + "\n" + item.description);
-            
             sf::FloatRect bounds = tooltipText.getLocalBounds();
             tooltipBackground.setSize(sf::Vector2f(bounds.size.x + 20, bounds.size.y + 20));
-            
-            tooltipBackground.setPosition(Vector2f(mousePos.x + 20, mousePos.y + 20));
-            tooltipText.setPosition(Vector2f(mousePos.x + 25, mousePos.y + 25));
-            return;
-        }
+            tooltipBackground.setPosition(mousePos + Vector2f(20, 20));
+            tooltipText.setPosition(mousePos + Vector2f(25, 25));
+        };
 
-        if(hoveredIndex == -2) {
-            const auto& item = playerInventory.getSecondWeapon().item;
-            tooltipText.setString(item.name + "\n" + item.description);
-            
-            sf::FloatRect bounds = tooltipText.getLocalBounds();
-            tooltipBackground.setSize(sf::Vector2f(bounds.size.x + 20, bounds.size.y + 20));
-            
-            tooltipBackground.setPosition(Vector2f(mousePos.x + 20, mousePos.y + 20));
-            tooltipText.setPosition(Vector2f(mousePos.x + 25, mousePos.y + 25));
-            return;
-        }
-
-        if(isVisible == false) return;
-
-        std::vector<ItemObject>& equipment = playerInventory.getEquipment();
-
-        const auto& item = equipment[hoveredIndex].item;
-        tooltipText.setString(item.name + "\n" + item.description);
-        
-        sf::FloatRect bounds = tooltipText.getLocalBounds();
-        tooltipBackground.setSize(sf::Vector2f(bounds.size.x + 20, bounds.size.y + 20));
-        
-        tooltipBackground.setPosition(Vector2f(mousePos.x + 20, mousePos.y + 20));
-        tooltipText.setPosition(Vector2f(mousePos.x + 25, mousePos.y + 25));
+        if (hoveredIndex == -1)
+            setTooltip(playerInventory.getFirstWeapon().item);
+        else if (hoveredIndex == -2)
+            setTooltip(playerInventory.getSecondWeapon().item);
+        else if (hoveredIndex >= 0 && hoveredIndex < (int)playerInventory.getEquipment().size())
+            setTooltip(playerInventory.getEquipment()[hoveredIndex].item);
     }
 
-    void updateAlways(sf::RenderWindow& window) {
+    // logica de update - hover si click pe sloturi
+    void update(sf::RenderWindow& window, Inventory& inventory) {
         sf::Vector2f mousePos = window.mapPixelToCoords(sf::Mouse::getPosition(window));
         hoveredIndex = -100;
 
-        // Check weapon slots hover
-        if (playerInventory.getFirstWeapon().item.type != ItemType::Null &&
-            playerInventory.getFirstWeapon().item.sprite.getGlobalBounds().contains(mousePos)) {
-            hoveredIndex = -1;
-        }
-
-        if (playerInventory.getSecondWeapon().item.type != ItemType::Null &&
-            playerInventory.getSecondWeapon().item.sprite.getGlobalBounds().contains(mousePos)) {
-            hoveredIndex = -2;
-        }
-
-        // Handle drop
-        if (sf::Mouse::isButtonPressed(sf::Mouse::Button::Left)) {
-            if (hoveredIndex == -1 && !removedItemOnClick) {
-                //dropWeapon(1);
-                removedItemOnClick = true;
+        for (size_t i = 0; i < playerInventory.getEquipment().size(); i++) {
+            if (playerInventory.getEquipment()[i].item.sprite.getGlobalBounds().contains(mousePos)) {
+                hoveredIndex = static_cast<int>(i);
+                break;
             }
-            else if (hoveredIndex == -2 && !removedItemOnClick) {
-                //dropWeapon(2);
+        }
+
+        if (weaponSlots[0].getGlobalBounds().contains(mousePos)) hoveredIndex = -1;
+        if (weaponSlots[1].getGlobalBounds().contains(mousePos)) hoveredIndex = -2;
+
+        if (sf::Mouse::isButtonPressed(sf::Mouse::Button::Left)) {
+            if (hoveredIndex != -100 && removedItemOnClick == false) {
+                onRemoveItem(hoveredIndex);
                 removedItemOnClick = true;
             }
         } else {
             removedItemOnClick = false;
         }
 
+        // update the existing equipmentText and weaponText with the current inventory status
+        equipmentText.setString("Equipments: " + std::to_string(playerInventory.getEquipment().size()) + " / " + std::to_string(16));
+        equipmentText.setPosition(background.getPosition() + Vector2f(PADDING, background.getSize().y - 30));
+
+        weaponText.setString("Weapons: " + std::to_string((playerInventory.getFirstWeapon().item.type != ItemType::Null) + (playerInventory.getSecondWeapon().item.type != ItemType::Null)) + " / 2");
+        weaponText.setPosition(background.getPosition() + Vector2f(PADDING, background.getSize().y - 50));
+
+        updateTooltip(mousePos);
+    }
+
+    // sterge un item din inventar (drop)
+    void onRemoveItem(int index) {
+        if(index == -1){
+            if(playerHolding == playerInventory.getFirstWeapon().item.texturePath)
+                playerHolding = "none";
+            playerInventory.dropWeapon(1);
+        } else if(index == -2){
+            if(playerHolding == playerInventory.getSecondWeapon().item.texturePath)
+                playerHolding = "none";
+            playerInventory.dropWeapon(2);
+        } else {
+            std::vector<ItemObject>& equipment = playerInventory.getEquipment();
+            if(index >= 0 && index < (int)equipment.size()) {
+                if(playerHolding == equipment[index].item.texturePath)
+                    playerHolding = "none";
+                playerInventory.removeEquipment(index);
+                updateBackgroundSize();
+            }
+        }
+    }
+
+    // adauga un item nou si updateaza UI
+    bool onAddItem(ItemObject item) {
+        if (!playerInventory.pickUp(item)) return false;
+        updateBackgroundSize();
+        return true;
+    }
+
+    // update global (hover pentru arme si tooltip)
+    void updateAlways(sf::RenderWindow& window) {
+        sf::Vector2f mousePos = window.mapPixelToCoords(sf::Mouse::getPosition(window));
+        hoveredIndex = -100;
+
+        if (playerInventory.getFirstWeapon().item.type != ItemType::Null &&
+            playerInventory.getFirstWeapon().item.sprite.getGlobalBounds().contains(mousePos))
+            hoveredIndex = -1;
+
+        if (playerInventory.getSecondWeapon().item.type != ItemType::Null &&
+            playerInventory.getSecondWeapon().item.sprite.getGlobalBounds().contains(mousePos))
+            hoveredIndex = -2;
+
         if (hoveredIndex == -1 || hoveredIndex == -2)
             updateTooltip(mousePos);
     }
-
-    void onRemoveItem(int index) {
-        if(index == -1){
-            if(playerHolding == playerInventory.getFirstWeapon().item.texturePath) {
-                playerHolding = "none"; // Unequip if it's equipped
-            }
-            playerInventory.dropWeapon(1);
-        }
-        if(index == -2){
-            if(playerHolding == playerInventory.getSecondWeapon().item.texturePath) {
-                playerHolding = "none"; // Unequip if it's equipped
-            }
-            playerInventory.dropWeapon(2);
-        }
-        std::vector<ItemObject> equipment = playerInventory.getEquipment();
-        if(index >= 0 && index < static_cast<int>(equipment.size())) {
-            if(playerHolding == equipment[index].item.texturePath) {
-                playerHolding = "none"; // Unequip if it's equipped
-            }
-            playerInventory.removeEquipment(index);
-            positionEquipmentSlots();
-            updateBackgroundSize();
-        }
-    }
 };
+
 
 InventoryWindow inventoryWindow(uiFont);
 
