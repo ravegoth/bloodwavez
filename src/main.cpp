@@ -1655,6 +1655,443 @@ public:
     void setToBeDeleted(bool toBeDeleted) { this->toBeDeleted = toBeDeleted; } // setter pentru flag-ul de autodistrugere
 };
 
+class SkeletronPart {
+public:
+    Vector2f position;
+    Vector2f velocity;
+    float followSpeed;
+    float delayFactor;
+    Sprite sprite;
+    float spriteSize;
+    Angle rotation;
+    bool rotate;
+    Angle desiredAngle;
+    std::string normalTexture;
+    std::string attackTexture;
+
+    int health = 0;
+    int maxHealth = 200;
+    bool active = true;
+    bool attacking = false;
+    float baseX;
+
+    SkeletronPart(float x, float y, float followSpeed, float delayFactor, string textureName, string attackTextureName, float spriteSize, bool rotate, bool flipped = false, float desiredRotation = 0)
+        : position(x, y), baseX(x), velocity(0, 0), followSpeed(followSpeed * 4), delayFactor(delayFactor), sprite(Sprite(TextureManager::getInstance().find(textureName))), rotate(rotate) {
+            this->spriteSize = spriteSize;
+            sprite.setOrigin(Vector2f(spriteSize/2.f, spriteSize/2.f));
+            rotation = sf::degrees(0);
+            desiredAngle = sf::degrees(desiredRotation);
+
+            normalTexture = textureName;
+            attackTexture = attackTextureName;
+
+            health = maxHealth;
+
+            if(flipped)
+            {
+                sprite.scale(sf::Vector2f(-1.f, 1.f));
+            }
+        }
+
+    void loadTexture(const std::string& texName) {
+        if(texName == ""){
+            return;
+        }
+        sprite.setTexture(TextureManager::getInstance().find(texName));
+        sprite.setOrigin(Vector2f(spriteSize/2.f, spriteSize/2.f));
+        sprite.setPosition(position);
+    }
+
+    void follow(Vector2f target, float dt, bool attacking = false) {
+
+        this->attacking = attacking;
+
+        if(attacking)
+        {
+            loadTexture(attackTexture);
+        }
+        else
+        {
+            loadTexture(normalTexture);
+        }
+        
+        Vector2f direction = target - position;
+        float dist = std::sqrt(direction.x * direction.x + direction.y * direction.y);
+        
+        float attackBoost = attacking ? 3.0f : 1.0f;
+
+        Vector2f directionNormalised = direction;
+
+        if(dist > 0)
+            directionNormalised /= dist; // Normalize
+
+        if(dist <= 1.1f)
+        {
+            position = target;
+        }
+
+        if (dist > 1.f) {
+            
+            // Calculate speed based on distance (further = faster)
+            float speedFactor = dist * (attacking ? 1.f : 0.5f);
+            float currentSpeed = (followSpeed * attackBoost) + speedFactor;
+            
+            if(currentSpeed > 200)
+            {
+                currentSpeed = 200; // speed limit
+            }
+
+            velocity = directionNormalised * currentSpeed;
+
+            position += velocity * dt * (attacking ? delayFactor * 0.5f : delayFactor);
+            
+            dist = std::sqrt(direction.x * direction.x + direction.y * direction.y);
+        
+            if(dist < 2.f)
+            {
+                position = target;
+            }
+        }
+
+        // Update rotation
+        if (dist > 1.f && attacking && rotate) {
+            rotation = sf::degrees((std::atan2(directionNormalised.y, directionNormalised.x) * 180.f / 3.14159f) - 90.f);
+            sprite.setRotation(rotation);
+        }
+        else if(rotate && attacking == false)
+        {
+            sprite.setRotation(desiredAngle);
+        }
+    }
+
+    bool takeDamage(int amount) {
+        if (!active) return false;
+        
+        health -= amount;
+        if (health <= 0) {
+            health = 0;
+            active = false;
+            return true; // Part destroyed
+        }
+        return false;
+    }
+
+    void applyWorldMovement() {
+        // Update base position with world movement
+        baseX += playerVx;
+        
+        // Apply world movement to current position
+        position.x += playerVx;
+    }
+    void draw(RenderWindow& window) {
+        if (!active) return;
+
+        sprite.setPosition(position);
+        window.draw(sprite);
+    }
+};
+
+class EnemySkeletron : public Enemy {
+private:
+    SkeletronPart head;
+    SkeletronPart upperArmLeft;
+    SkeletronPart lowerArmLeft;
+    SkeletronPart palmLeft;
+    SkeletronPart upperArmRight;
+    SkeletronPart lowerArmRight;
+    SkeletronPart palmRight;
+
+    Vector2f position = Vector2f(0, 100);
+    Vector2f worldPosition;
+
+    // Arm connection points (relative to head)
+    const Vector2f LEFT_ARM_BASE_OFFSET = Vector2f(-80, 25);
+    const Vector2f RIGHT_ARM_BASE_OFFSET = Vector2f(80, 25);
+    const Vector2f FOREARM_OFFSET = Vector2f(0, 40);
+    const Vector2f PALM_OFFSET = Vector2f(32, 37);
+
+    struct AttackState {
+
+        enum State { IDLE, ATTACKING, RETURNING };
+        
+        State state = IDLE;
+        float timer = 0.f;
+        const float ATTACK_DURATION = 70.8f;
+        const float RETURN_DURATION = 10.2f;
+        const float COOLDOWN_MIN = 300.0f;
+        const float COOLDOWN_MAX = 600.0f;
+        float currentCooldown = 0.f;
+        Vector2f originalPosition;
+        Vector2f attackTarget;
+        bool hasDamaged = false;
+    };
+
+    AttackState leftHandAttack;
+    AttackState rightHandAttack;
+    AttackState headAttack;
+
+    // Special attack when hands are destroyed
+    bool headCanAttack = false;
+    Vector2f headNeutralPosition;
+
+public:
+    EnemySkeletron(float x, float y)
+        : Enemy(x, y, getX(), getY(), false), worldPosition(x, y),
+        //float x, float y, float followSpeed, 
+        //float delayFactor, string textureName, 
+        //string attackTextureName, float spriteSize, 
+        //bool rotate, bool flipped = false, float desiredRotation = 0
+          head(x, y, 4.0f, 0.04f, "Boss_Head", "", 128.f, false),
+          upperArmLeft(x - 50, y + 50, 5.0f, 0.11f, 
+            "Boss_Arm_UpperVertical", "", 64.f, true, false, 45.f),
+          lowerArmLeft(x - 80, y + 100, 4.5f, 0.085f, 
+            "Boss_Arm_Vertical", "", 64.f, true, false, 135.f),
+          palmLeft(x - 80, y + 140, 4.2f, 0.075f, 
+            "Boss_Hand_Left", "Boss_PalmAttackt", 64.f, true, false),
+          upperArmRight(x + 50, y + 50, 5.0f, 0.11f, 
+            "Boss_Arm_UpperVertical", "", 64.f, true, true, -45.f),
+          lowerArmRight(x + 80, y + 100, 4.5f, 0.085f, 
+            "Boss_Arm_Vertical", "", 64.f, true, true, -135.f),
+          palmRight(x + 80, y + 140, 4.2f, 0.075f, 
+            "Boss_Hand_Left", "Boss_PalmAttackt", 64.f, true, true)
+    {
+        maxHealth = 500;
+        health = maxHealth;
+        speed = 5.0f;
+        maxSpeed = 25.0f;
+        
+        //Offset
+        leftHandAttack.currentCooldown = 100.0f;
+        rightHandAttack.currentCooldown = 200.5f;
+        headAttack.currentCooldown = 100.0f;
+
+        headNeutralPosition = position;
+        
+        // Seed random number generator
+        srand(static_cast<unsigned int>(time(nullptr)));
+    }
+
+    void takeDamage(int amount, const std::string& partName) {
+        bool partDestroyed = false;
+        
+        if (partName == "head") {
+            partDestroyed = head.takeDamage(amount);
+        } 
+        else if (partName == "palmLeft") {
+            partDestroyed = palmLeft.takeDamage(amount);
+            if (partDestroyed) {
+                // Disable entire left arm
+                upperArmLeft.active = false;
+                lowerArmLeft.active = false;
+            }
+        } 
+        else if (partName == "palmRight") {
+            partDestroyed = palmRight.takeDamage(amount);
+            if (partDestroyed) {
+                // Disable entire right arm
+                upperArmRight.active = false;
+                lowerArmRight.active = false;
+            }
+        }
+        
+        // Enable head attacks when both hands are destroyed
+        if (!palmLeft.active && !palmRight.active) {
+            std::cout<<"head attack";
+            headCanAttack = true;
+        }
+    }
+
+    void update(float dt, Vector2f playerPos) {
+        //palmRight.takeDamage(150);
+        //palmLeft.takeDamage(150);
+        //headCanAttack = true;
+        // Store head neutral position
+
+        worldPosition.x += playerVx;
+
+        // Apply world movement to all parts
+        head.applyWorldMovement();
+        upperArmLeft.applyWorldMovement();
+        lowerArmLeft.applyWorldMovement();
+        palmLeft.applyWorldMovement();
+        upperArmRight.applyWorldMovement();
+        lowerArmRight.applyWorldMovement();
+        palmRight.applyWorldMovement();
+
+        headNeutralPosition.x += playerVx;
+
+
+        // Head follows neutral position when not attacking
+        if (headAttack.state != AttackState::ATTACKING) {
+            head.follow(headNeutralPosition, dt);
+        }
+
+        leftHandAttack.originalPosition.x += playerVx;
+        leftHandAttack.attackTarget.x += playerVx;
+        rightHandAttack.originalPosition.x += playerVx;
+        rightHandAttack.attackTarget.x += playerVx;
+        headAttack.originalPosition.x += playerVx;
+        headAttack.attackTarget.x += playerVx;
+        
+        // Update hand attack states if hands are active
+        if (palmLeft.active) updateAttackState(dt, playerPos, leftHandAttack, palmLeft);
+        if (palmRight.active) updateAttackState(dt, playerPos, rightHandAttack, palmRight);
+        
+        // Update head attack if enabled
+        if (headCanAttack) {
+            updateAttackState(dt, playerPos, headAttack, head, true);
+        }
+
+        // Left arm chain
+        if (palmLeft.active) {
+            if (leftHandAttack.state == AttackState::ATTACKING || 
+                leftHandAttack.state == AttackState::RETURNING) {
+                bridgeArm(upperArmLeft, lowerArmLeft, head.position + LEFT_ARM_BASE_OFFSET, palmLeft, dt);
+            } else {
+                upperArmLeft.follow(head.position + LEFT_ARM_BASE_OFFSET, dt);
+                lowerArmLeft.follow(upperArmLeft.position + FOREARM_OFFSET, dt);
+                palmLeft.follow(lowerArmLeft.position + PALM_OFFSET, dt);
+            }
+        }
+
+        // Right arm chain
+        if (palmRight.active) {
+            if (rightHandAttack.state == AttackState::ATTACKING || 
+                rightHandAttack.state == AttackState::RETURNING) {
+                bridgeArm(upperArmRight, lowerArmRight, head.position + RIGHT_ARM_BASE_OFFSET, palmRight, dt);
+            } else {
+                upperArmRight.follow(head.position + RIGHT_ARM_BASE_OFFSET, dt);
+                lowerArmRight.follow(upperArmRight.position + Vector2f(-FOREARM_OFFSET.x, FOREARM_OFFSET.y), dt);
+                palmRight.follow(lowerArmRight.position + Vector2f(-PALM_OFFSET.x, PALM_OFFSET.y), dt);
+            }
+        }
+        
+        // Check for collisions with player
+        checkPlayerCollision();
+    }
+
+    void draw(RenderWindow& window) {
+        // Draw bones if parts are active
+        //if (palmLeft.active) drawBones(window, true);
+        //if (palmRight.active) drawBones(window, false);
+        
+        // Draw body parts
+        if (palmLeft.active) {
+            upperArmLeft.draw(window);
+            lowerArmLeft.draw(window);
+            palmLeft.draw(window);
+        }
+        
+        if (palmRight.active) {
+            upperArmRight.draw(window);
+            lowerArmRight.draw(window);
+            palmRight.draw(window);
+        }
+        
+        head.draw(window);
+        
+        // Draw health bars
+        //drawHealthBars(window);
+    }
+
+private:
+
+    void bridgeArm(SkeletronPart& upper, SkeletronPart& lower,
+                   const Vector2f& base, SkeletronPart& palm, float dt) {
+        if (!palm.active) return;
+        
+        Vector2f dir = palm.position - base;
+        float len = std::hypot(dir.x, dir.y);
+        if (len > 0.1f) {
+            dir /= len;
+            Vector2f t1 = base + dir * (len * 0.3f);
+            Vector2f t2 = base + dir * (len * 0.7f);
+            upper.follow(t1, dt, true);
+            lower.follow(t2, dt, true);
+        }
+    }
+
+    void updateAttackState(float dt, Vector2f playerPos, AttackState& state, 
+                          SkeletronPart& part, bool isHead = false) {
+        switch (state.state) {
+            case AttackState::IDLE:
+                state.currentCooldown -= dt;
+                
+                if (state.currentCooldown <= 0) {
+                    state.state = AttackState::ATTACKING;
+                    state.timer = state.ATTACK_DURATION;
+                    state.originalPosition = part.position;
+                    state.attackTarget = playerPos;
+                }
+                break;
+                
+            case AttackState::ATTACKING:
+                std::cout<<"attack ";
+                state.timer -= dt;
+                state.hasDamaged = false;
+                part.follow(state.attackTarget, dt, true);
+                
+                if (state.timer <= 0) {
+                    state.state = AttackState::RETURNING;
+                    state.timer = state.RETURN_DURATION;
+                }
+                break;
+                
+            case AttackState::RETURNING:
+                state.timer -= dt;
+                
+                Vector2f returnPos = isHead ? headNeutralPosition : 
+                    (state.originalPosition + (isHead ? Vector2f(0, 0) : PALM_OFFSET));
+                
+                part.follow(returnPos, dt, false);
+                
+                if (state.timer <= 0) {
+                    state.state = AttackState::IDLE;
+                    float randomCooldown = state.COOLDOWN_MIN + 
+                        static_cast<float>(rand()) / 
+                        (static_cast<float>(RAND_MAX/(state.COOLDOWN_MAX - state.COOLDOWN_MIN)));
+                    state.currentCooldown = randomCooldown;
+                }
+                break;
+        }
+    }
+
+    void checkPlayerCollision() {
+        float collisionRadius = 30.f; // Size for collision detection
+        
+        // Check palm left collision during attack
+        if (palmLeft.active && leftHandAttack.state == AttackState::ATTACKING) {
+            float dist = std::hypot(palmLeft.position.x - playerX, 
+                                   palmLeft.position.y - playerY);
+            if (dist < collisionRadius && !leftHandAttack.hasDamaged) {
+                // Damage player
+                leftHandAttack.hasDamaged = true;
+                // player.takeDamage(20);
+            }
+        }
+        
+        // Check palm right collision
+        if (palmRight.active && rightHandAttack.state == AttackState::ATTACKING) {
+            float dist = std::hypot(palmRight.position.x - playerX, 
+                                   palmRight.position.y - playerY);
+            if (dist < collisionRadius && !rightHandAttack.hasDamaged) {
+                rightHandAttack.hasDamaged = true;
+                // player.takeDamage(20);
+            }
+        }
+        
+        // Check head collision during attack
+        if (headCanAttack && headAttack.state == AttackState::ATTACKING) {
+            float dist = std::hypot(head.position.x - playerX, 
+                                   head.position.y - playerY);
+            if (dist < collisionRadius && !headAttack.hasDamaged) {
+                headAttack.hasDamaged = true;
+                // player.takeDamage(30); // Head does more damage
+            }
+        }
+    }
+};
+
 // clasa de noduri pentru skill tree
 class skillTreeNode {
 private:
@@ -1959,6 +2396,7 @@ vector<ExpOrb> mapExpOrbs; // container pentru orb-urile de exp din harta
 // inamici & entitati
 vector<EnemyGoblin> mapGoblins; // container pentru inamicii de tip goblin
 vector<EnemyBaphomet> mapBaphomets; // container pentru inamicii de tip Baphomet
+EnemySkeletron *mapSkeletron;
 // noduri skilltree
 skillTreeNode skills[10]; // container pentru nodurile de skill tree
 vector<Arrow> playerArrows; // container pentru sageti
@@ -2137,6 +2575,8 @@ void init() {
             }
         }
     }
+
+    mapSkeletron = new EnemySkeletron(100, 100);
 
 }
 
@@ -2674,6 +3114,14 @@ void drawEnemies(RenderWindow& window) {
             auto it = remove_if(mapBaphomets.begin(), mapBaphomets.end(), [](EnemyBaphomet& e) { return e.isToBeDeleted(); });
             mapBaphomets.erase(it, mapBaphomets.end()); // sterge inamicul din vector
         }
+    }
+
+    //SKELETRON
+    mapSkeletron->update(1.f, sf::Vector2f(200 + playerVx, playerY));
+    mapSkeletron->draw(window);
+
+    if (mapSkeletron->isToBeDeleted()) {
+        delete mapSkeletron;
     }
 }
 
