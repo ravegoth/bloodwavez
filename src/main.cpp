@@ -77,6 +77,10 @@ int pickupRadius = 40; // raza de pickup pentru obiecte
 // arc
 bool canFireArrows = true; // flag pentru a verifica daca se poate trage cu arcul
 string arrowType = "arrow_basic"; // tipul sagetii pe care o trage jucatorul
+int arrowSpeed = 5; // viteza sagetii
+int arrowDamage = 10; // damage-ul sagetii
+int arrowCooldown = 60; // cooldown-ul pentru tragerea cu arcul (in frame-uri)
+int currentBowCooldown = 0; // cooldown-ul curent pentru arcul jucatorului
 
 float playerVx = 0; // velocitatea pe axa x a jucatorului
 float playerVy = 0; // velocitatea pe axa y a jucatoruluis
@@ -352,7 +356,6 @@ public:
 };
 
 Inventory playerInventory;
-
 
 // clasa pentru interfata inventarului
 class InventoryWindow {
@@ -656,7 +659,6 @@ public:
             updateTooltip(mousePos);
     }
 };
-
 
 InventoryWindow inventoryWindow(uiFont);
 
@@ -1213,6 +1215,42 @@ public:
         if (y > 600) { y = 600; vy -= 1; }
     }
 
+    float getEnemyWidth() const { return enemyWidth; } // getter for enemy width
+    float getEnemyHeight() const { return enemyHeight; } // getter for enemy height
+    float getAttackRadius() const { return attackRadius; } // getter for attack radius
+    int getXpOnDrop() const { return xpOnDrop; } // getter for XP on drop
+    int getCoinsOnDrop() const { return coinsOnDrop; } // getter for coins on drop
+    int getDamage() const { return damage; } // getter for damage dealt by goblin
+    bool isMeleeEnemy() const { return isMelee; } // getter for melee enemy
+    bool isToBeDeleted() const { return toBeDeleted; } // getter for toBeDeleted flag
+    bool getIsAttacking() const { return isAttacking; } // getter for isAttacking flag
+    int getIsAttackingAnimation() const { return isAttackingAnimation; } // getter for isAttackingAnimation
+    void setIsAttackingAnimation(int value) { isAttackingAnimation = value; } // setter for isAttackingAnimation
+    void setToBeDeleted(bool deleted) { toBeDeleted = deleted; } // setter for toBeDeleted flag
+    void setHealth(int health) { this->health = health; } // setter for health
+    void setMaxHealth(int maxHealth) { this->maxHealth = maxHealth; } // setter for max health
+    void setDamage(int damage) { this->damage = damage; } // setter for damage
+    void setXpOnDrop(int xp) { xpOnDrop = xp; } // setter for XP on drop
+    void setCoinsOnDrop(int coins) { coinsOnDrop = coins; } // setter for coins on drop
+    void setIsMelee(bool isMelee) { this->isMelee = isMelee; } // setter for isMelee flag
+    void setSpeed(float speed) { this->speed = speed; } // setter for speed
+    void setMaxSpeed(float maxSpeed) { this->maxSpeed = maxSpeed; } // setter for max speed
+    void setAttackRadius(float radius) { attackRadius = radius; } // setter for attack radius
+    void setEnemyWidth(float width) { enemyWidth = width; } // setter for enemy width
+    void setEnemyHeight(float height) { enemyHeight = height; } // setter for enemy height
+    void setAttackCooldown(int cooldown) { attackCooldown = cooldown; } // setter for attack cooldown
+    void setAttackCooldownStart(int cooldownStart) { attackCooldownStart = cooldownStart; } // setter for attack cooldown start
+    void setCanAttack(bool canAttack) { this->canAttack = canAttack; } // setter for canAttack flag
+    void setVx(float vx) { this->vx = vx; } // setter for x velocity
+    void setVy(float vy) { this->vy = vy; } // setter for y velocity
+    void setX(float x) { this->x = x; } // setter for x position
+    void setY(float y) { this->y = y; } // setter for y position
+    void setAnimation(int animation) { this->animation = animation; } // setter for animation
+    void setIsAttacking(bool isAttacking) { this->isAttacking = isAttacking; } // setter for isAttacking flag
+    void setIsMeleeEnemy(bool isMelee) { this->isMelee = isMelee; } // setter for isMelee flag
+    void setEnemyBrain(const EnemyBrain& ai) { this->ai = ai; } // setter for AI
+    EnemyBrain getEnemyBrain() const { return ai; } // getter for AI
+
     ~EnemyGoblin() {
         // destructor
     }
@@ -1381,6 +1419,42 @@ public:
         if (y < 0) y = 0, vy += 1;
         if (y > 600) y = 600, vy -= 1;
     }
+
+    float getEnemyWidth() const { return enemyWidth; } // getter for enemy width
+    float getEnemyHeight() const { return enemyHeight; } // getter for enemy height
+    float getAttackRadius() const { return attackRadius; } // getter for attack radius
+    int getXpOnDrop() const { return xpOnDrop; } // getter for XP on drop
+    int getCoinsOnDrop() const { return coinsOnDrop; } // getter for coins on drop
+    int getDamage() const { return damage; } // getter for damage dealt by baphomet
+    bool isMeleeEnemy() const { return isMelee; } // getter for melee enemy
+    bool isToBeDeleted() const { return toBeDeleted; } // getter for toBeDeleted flag
+    bool getIsAttacking() const { return isAttacking; } // getter for isAttacking flag
+    int getIsAttackingAnimation() const { return isAttackingAnimation; } // getter for isAttackingAnimation
+    void setIsAttackingAnimation(int value) { isAttackingAnimation = value; } // setter for isAttackingAnimation
+    void setToBeDeleted(bool deleted) { toBeDeleted = deleted; } // setter for toBeDeleted flag
+    void setHealth(int health) { this->health = health; } // setter for health
+    void setMaxHealth(int maxHealth) { this->maxHealth = maxHealth; } // setter for max health
+    void setDamage(int damage) { this->damage = damage; } // setter for damage
+    void setXpOnDrop(int xp) { xpOnDrop = xp; } // setter for XP on drop
+    void setCoinsOnDrop(int coins) { coinsOnDrop = coins; } // setter for coins on drop
+    void setIsMelee(bool isMelee) { this->isMelee = isMelee; } // setter for isMelee flag
+    void setSpeed(float speed) { this->speed = speed; } // setter for speed
+    void setMaxSpeed(float maxSpeed) { this->maxSpeed = maxSpeed; } // setter for max speed
+    void setAttackRadius(float radius) { attackRadius = radius; } // setter for attack radius
+    void setEnemyWidth(float width) { enemyWidth = width; } // setter for enemy width
+    void setEnemyHeight(float height) { enemyHeight = height; } // setter for enemy height
+    void setAttackCooldown(int cooldown) { attackCooldown = cooldown; } // setter for attack cooldown
+    void setAttackCooldownStart(int cooldownStart) { attackCooldownStart = cooldownStart; } // setter for attack cooldown start
+    void setCanAttack(bool canAttack) { this->canAttack = canAttack; } // setter for canAttack flag
+    void setVx(float vx) { this->vx = vx; } // setter for x velocity
+    void setVy(float vy) { this->vy = vy; } // setter for y velocity
+    void setX(float x) { this->x = x; } // setter for x position
+    void setY(float y) { this->y = y; } // setter for y position
+    void setAnimation(int animation) { this->animation = animation; } // setter for animation
+    void setIsAttacking(bool isAttacking) { this->isAttacking = isAttacking; } // setter for isAttacking flag
+    void setIsMeleeEnemy(bool isMelee) { this->isMelee = isMelee; } // setter for isMelee flag
+    void setEnemyBrain(const EnemyBrain& ai) { this->ai = ai; } // setter for AI
+    EnemyBrain getEnemyBrain() const { return ai; } // getter for AI
 
     ~EnemyBaphomet() {
         // destructor
@@ -1741,6 +1815,137 @@ public:
     }
 };
 
+class Arrow {
+public:
+    float x, y;
+    float vx, vy;
+    std::string type; // Stores the base name like "arrow_basic"
+    sf::Sprite sprite;
+    bool toBeDeleted;
+    float rotationDegrees; // Store rotation in degrees
+
+    Arrow(float startX, float startY, float targetX, float targetY, const std::string& currentArrowType)
+        : x(startX), y(startY), toBeDeleted(false), sprite(TextureManager::getInstance().find(currentArrowType)), type(currentArrowType) {
+        
+        float dx = targetX - startX;
+        float dy = targetY - startY;
+        // Normalize direction vector
+        float length = std::sqrt(dx * dx + dy * dy);
+        float speed = 15.0f; // Arrow speed, can be adjusted
+
+        if (length != 0) {
+            vx = (dx / length) * speed;
+            vy = (dy / length) * speed;
+        } else {
+            // Default movement if start and target are same (e.g., straight up if mouse is on player)
+            vx = 0;
+            vy = -speed; 
+        }
+
+        // Calculate rotation in degrees
+        rotationDegrees = std::atan2(dy, dx) * 180.0f / M_PI;
+
+        TextureManager& tm = TextureManager::getInstance();
+        // The 'type' string (e.g., "arrow_basic") is used directly as the texture name
+        if (!tm.isLoaded(type)) {
+            tm.justLoad(type); // Attempt to load if not already loaded
+        }
+        
+        if (tm.isLoaded(type)) {
+            sprite.setTexture(tm.find(type));
+            sf::FloatRect bounds = sprite.getLocalBounds();
+            if (bounds.size.x <= 0 || bounds.size.y <= 0) {
+                std::cerr << "Error: Arrow texture '" << type << "' loaded but is empty or invalid." << std::endl;
+                toBeDeleted = true; // Mark for deletion if texture is bad
+            } else {
+                sprite.setOrigin(Vector2f(bounds.size.x / 2.0f, bounds.size.y / 2.0f)); // Center origin for rotation
+                // Adjust scale as needed. This is a placeholder scale.
+                // e.g. if your arrow sprite is 32x8 pixels and you want it to appear that size:
+                // sprite.setScale(32.f / bounds.width, 8.f / bounds.height);
+                // For a generic small arrow:
+                sprite.setScale(Vector2f(0.5f, 0.5f)); // Adjust scale to fit your game
+            }
+        } else {
+            std::cerr << "Error: Arrow texture '" << type << "' could not be loaded." << std::endl;
+            toBeDeleted = true; // Mark for deletion if texture fails to load
+        }
+    }
+
+    void update(vector<EnemyGoblin>& mapGoblins, vector<EnemyBaphomet>& mapBaphomets) {
+        if (toBeDeleted) return;
+
+        x += vx;
+        y += vy;
+        
+        // Arrows move with the world's horizontal scroll, similar to coins/XP orbs
+        x += playerVx; 
+        // y += playerVy; // Typically arrows don't follow player's Y after firing
+
+        // Check for window boundaries (0,0 to 800,600)
+        if (x < 0 || x > 800 || y < 0 || y > 600) {
+            toBeDeleted = true;
+        }
+
+        // Arrow-enemy collision
+        // Note: Assumes Enemy class has public getEnemyWidth() and getEnemyHeight() methods,
+        // or that enemyWidth/enemyHeight are public members.
+        if (!toBeDeleted) {
+            for (auto& goblin : mapGoblins) {
+                if (!goblin.isToBeDeleted()) {
+                    // Hitbox for goblin: center (goblin.getX(), goblin.getY()), size (goblin.enemyWidth, goblin.enemyHeight)
+                    // This needs goblin.enemyWidth and goblin.enemyHeight to be accessible.
+                    // Add public getters getEnemyWidth() and getEnemyHeight() to Enemy class if they are protected.
+                    float goblinLeft = goblin.getX() - goblin.getEnemyWidth() / 2.0f;
+                    float goblinRight = goblin.getX() + goblin.getEnemyWidth() / 2.0f;
+                    float goblinTop = goblin.getY() - goblin.getEnemyHeight() / 2.0f;
+                    float goblinBottom = goblin.getY() + goblin.getEnemyHeight() / 2.0f;
+
+                    if (x >= goblinLeft && x <= goblinRight && y >= goblinTop && y <= goblinBottom) {
+                        // Example: if (type == "arrow_fire") arrowDamage = 20;
+                        goblin.takeDamage(playerDamageMultiplier * arrowDamage);
+                        toBeDeleted = true;
+                        break; 
+                    }
+                }
+            }
+        }
+        if (!toBeDeleted) { // Check Baphomets if not already hit a goblin
+            for (auto& baphomet : mapBaphomets) {
+                if (!baphomet.isToBeDeleted()) {
+                    float baphometLeft = baphomet.getX() - baphomet.getEnemyWidth() / 2.0f;
+                    float baphometRight = baphomet.getX() + baphomet.getEnemyWidth() / 2.0f;
+                    float baphometTop = baphomet.getY() - baphomet.getEnemyHeight() / 2.0f;
+                    float baphometBottom = baphomet.getY() + baphomet.getEnemyHeight() / 2.0f;
+
+                    if (x >= baphometLeft && x <= baphometRight && y >= baphometTop && y <= baphometBottom) {
+                        baphomet.takeDamage(playerDamageMultiplier * arrowDamage);
+                        toBeDeleted = true;
+                        break; 
+                    }
+                }
+            }
+        }
+    }
+
+    void draw(sf::RenderWindow& window) {
+        if (toBeDeleted) return;
+        sprite.setPosition(Vector2f(x, y));
+        sprite.setRotation(sf::degrees(rotationDegrees));
+
+        // set scale to 50x50 (based off texture)
+        sprite.setScale(Vector2f(50.f / sprite.getLocalBounds().size.x, 50.f / sprite.getLocalBounds().size.y));
+
+        // and origin to center of sprite
+        sprite.setOrigin(Vector2f(sprite.getLocalBounds().size.x / 2.0f, sprite.getLocalBounds().size.y / 2.0f));
+
+        window.draw(sprite);
+    }
+
+    bool isToBeDeleted() const {
+        return toBeDeleted;
+    }
+};
+
 // -------------------------------------------------------------------- containere --------------------------------------------------------------------
 
 vector<Object> mapObjects;  // container pentru obiectele din harta
@@ -1751,7 +1956,8 @@ vector<ExpOrb> mapExpOrbs; // container pentru orb-urile de exp din harta
 vector<EnemyGoblin> mapGoblins; // container pentru inamicii de tip goblin
 vector<EnemyBaphomet> mapBaphomets; // container pentru inamicii de tip Baphomet
 // noduri skilltree
-skillTreeNode skills[10];
+skillTreeNode skills[10]; // container pentru nodurile de skill tree
+vector<Arrow> playerArrows; // container pentru sageti
 
 // ---------------------------------------------------------- functiile folosite de obiecte --------------------------------------------------------------------
 
@@ -1778,7 +1984,7 @@ void playerTakeDamage(int damage) {
 }
 
 // -------------------------------------------------------------------- controale --------------------------------------------------------------------
-void controls() {
+void controls(RenderWindow& window) {
     if (keysPressed[static_cast<int>(Keyboard::Key::W)]) {  // daca tasta W este apasata
         playerVy -= playerSpeed;
     }
@@ -1801,9 +2007,9 @@ void controls() {
         }
     }
 
-    // if (keysPressed[static_cast<int>(Keyboard::Key::Escape)]) {  // daca tasta Escape este apasata
-    //     exit(0); // iese din program
-    // }
+    if (keysPressed[static_cast<int>(Keyboard::Key::Escape)]) {  // daca tasta Escape este apasata
+        exit(0); // iese din program
+    }
 
     // // debug: C = spawns coins at 500, 300
     // if (keysPressed[static_cast<int>(Keyboard::Key::C)]) {  // daca tasta C este apasata
@@ -1838,6 +2044,27 @@ void controls() {
         if (playerInventory.getSecondWeapon().item.type != ItemType::Null) {
             playerHolding = playerInventory.getSecondWeapon().item.texturePath; // echipeaza al doilea weapon
             cout << "DEBUG: equipped weapon: " << playerInventory.getSecondWeapon().item.name << endl; // afiseaza numele weapon-ului echipat
+        }
+    }
+
+    if (mouseDown) {
+        cout << "CLICK";
+    }
+
+    // if can fire arrows + click pressed
+    if (canFireArrows && mouseDown && leftClick) {
+        if (arrowCooldown > 0) {
+            cout << "DEBUG: cannot fire arrow, cooldown active: " << arrowCooldown << endl;
+        } else {
+            // get mouse position
+            Vector2f mousePos = window.mapPixelToCoords(Mouse::getPosition(window));
+            // create a new arrow
+            playerArrows.push_back(Arrow(200, playerY, mousePos.x, mousePos.y, arrowType)); // playerX, playerY are the player's position
+            cout << "DEBUG: fired arrow from (" << playerX << ", " << playerY << ") to (" << mousePos.x << ", " << mousePos.y << ")" << endl;
+            canFireArrows = false; // disable firing arrows until next frame
+            arrowCooldown = currentBowCooldown; 
+            if (arrowCooldown > -2) arrowCooldown -= 1; // reduce cooldown by 1 frame
+            leftClick = false; // reset left click to prevent multiple arrows being fired in one frame
         }
     }
 }
@@ -1910,6 +2137,9 @@ void init() {
 }
 
 // -------------------------------------------------------------------- update --------------------------------------------------------------------
+
+void updateArrows(RenderWindow& window);
+
 void update(RenderWindow& window) {
     // limiteaza pozitia jucatorului in fereastra
     if (playerY < 0) playerY = 0;
@@ -2093,7 +2323,23 @@ void update(RenderWindow& window) {
     }
 
     if (keysReleased[static_cast<int>(Keyboard::Key::P)]) skillTreeDown = true;
+
+    // update arrows
+    arrowCooldown -= 1; // reduce cooldown by 1 frame
+    updateArrows(window);
 }
+
+void updateArrows(RenderWindow& window) {
+    for (auto& arrow : playerArrows) {
+        arrow.update(mapGoblins, mapBaphomets); // update each arrow's position and check for collisions
+    }
+
+    // Remove arrows that are marked for deletion (hit edge or enemy)
+    playerArrows.erase(std::remove_if(playerArrows.begin(), playerArrows.end(),
+        [](const Arrow& a){ return a.isToBeDeleted(); }),
+        playerArrows.end());
+}
+
 
 // -------------------------------------------------------------------- desenare --------------------------------------------------------------------
 void drawPlayerAt(RenderWindow& window, float x, float y, float speed = 0, float scale = 0.45f) {
@@ -2228,6 +2474,7 @@ void drawPlayerWeapon(RenderWindow& window) {
 
         canFireArrows = true; // pt ca are arc
         arrowType = "arrow_basic"; // seteaza tipul de sageata la sageata de bazass
+        currentBowCooldown = 60;
     }
 }
 void drawCoins(RenderWindow& window) {
@@ -2393,6 +2640,12 @@ void drawText(RenderWindow& window) {
     window.draw(xpText);
 }
 
+void drawArrows(RenderWindow& window) {
+    for (auto& arrow : playerArrows) {
+        arrow.draw(window);
+    }
+}
+
 // draw all enemies
 void drawEnemies(RenderWindow& window) {
     // GOBLINS
@@ -2521,6 +2774,9 @@ void draw(RenderWindow& window) {
     drawWorldItems(window); // desenare obiecte din lume
 
     drawEnemies(window); // desenare inamici
+    
+    // player arrows
+    drawArrows(window); // desenare sageti
 
     drawExpOrbs(window); // desenare orb-uri de exp
     drawCoins(window); // desenare monede
@@ -2578,6 +2834,7 @@ int main() {
             }
             if (event.is<Event::MouseButtonPressed>()) {
                 auto mouseEv = event.getIf<Event::MouseButtonPressed>();
+                mouseDown = true; // setam mouseDown la true cand apasam un buton
                 if(mouseEv) {
                     if(mouseEv->button == Mouse::Button::Left)
                         leftClick = true;
@@ -2587,6 +2844,7 @@ int main() {
             }
             if (event.is<Event::MouseButtonReleased>()) {
                 auto mouseEv = event.getIf<Event::MouseButtonReleased>();
+                mouseDown = false; // setam mouseDown la false cand eliberam un buton
                 if(mouseEv) {
                     if(mouseEv->button == Mouse::Button::Left)
                         leftClick = false;
@@ -2603,7 +2861,7 @@ int main() {
             }
         }
         window.clear();     // sterge continutul ferestrei
-        controls();         // proceseaza input-ul jucatorului
+        controls(window); // gestioneaza input-ul de la tastatura si mouse
         update(window);       // actualizeaza starea jocului
         draw(window);       // deseneaza totul in fereastra
         window.display();   // afiseaza continutul desenat pe ecran
