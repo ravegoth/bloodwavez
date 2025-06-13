@@ -578,6 +578,10 @@ public:
             setTooltip(playerInventory.getSecondWeapon().item);
         else if (hoveredIndex >= 0 && hoveredIndex < (int)playerInventory.getEquipment().size())
             setTooltip(playerInventory.getEquipment()[hoveredIndex].item);
+        else {
+            tooltipText.setString(""); // clear tooltip if not hovering over a valid item
+            tooltipBackground.setSize(sf::Vector2f(0, 0)); // clear background size
+        }
     }
 
     // logica de update - hover si click pe sloturi
