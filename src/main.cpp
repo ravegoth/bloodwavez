@@ -69,10 +69,14 @@ int playerY = 300; // pozitia initiala a jucatorului
 bool notMoving = true; // flag pentru miscarea jucatorului
 int playerSpeed = 1;              // viteza de miscare a jucatorului
 
-string playerHolding = "weapon_basic_sword"; // arma pe care o tine jucatorul init
+string playerHolding = "none"; // arma pe care o tine jucatorul init
 Vector2f swordHitbox1(0, 0); // hitbox-ul armei (sword1)
 Vector2f swordHitbox2(0, 0); // hitbox-ul armei (sword2ss)
 int pickupRadius = 40; // raza de pickup pentru obiecte
+
+// arc
+bool canFireArrows = true; // flag pentru a verifica daca se poate trage cu arcul
+string arrowType = "arrow_basic"; // tipul sagetii pe care o trage jucatorul
 
 float playerVx = 0; // velocitatea pe axa x a jucatorului
 float playerVy = 0; // velocitatea pe axa y a jucatoruluis
@@ -241,7 +245,7 @@ struct ItemObject {
 
         sf::Texture& texture = TextureManager::getInstance().find(item.texturePath);
         sf::Sprite sprite(texture);
-        sprite.setScale(sf::Vector2f(40.0f / texture.getSize().x, 40.0f / texture.getSize().y));
+        sprite.setScale(sf::Vector2f(55.0f / texture.getSize().x, 55.0f / texture.getSize().y));
         sprite.setPosition(sf::Vector2f(static_cast<float>(x), static_cast<float>(y)));
         window.draw(sprite);
     }
@@ -607,13 +611,22 @@ public:
 
     void onRemoveItem(int index) {
         if(index == -1){
+            if(playerHolding == playerInventory.getFirstWeapon().item.texturePath) {
+                playerHolding = "none"; // Unequip if it's equipped
+            }
             playerInventory.dropWeapon(1);
         }
         if(index == -2){
+            if(playerHolding == playerInventory.getSecondWeapon().item.texturePath) {
+                playerHolding = "none"; // Unequip if it's equipped
+            }
             playerInventory.dropWeapon(2);
         }
         std::vector<ItemObject> equipment = playerInventory.getEquipment();
         if(index >= 0 && index < static_cast<int>(equipment.size())) {
+            if(playerHolding == equipment[index].item.texturePath) {
+                playerHolding = "none"; // Unequip if it's equipped
+            }
             playerInventory.removeEquipment(index);
             positionEquipmentSlots();
             updateBackgroundSize();
@@ -1791,6 +1804,18 @@ void controls() {
     }
 
     // cout << "dashing data: " << "dashing: " << dashing << " canDash: " << canDash << " dashDuration: " << dashDuration << " dashCooldown: " << dashCooldown << endl;
+
+    if (keysPressed[static_cast<int>(Keyboard::Key::Num1)]) {  // daca tasta 1 este apasata, echipeaza primul weapon din inventar
+        if (playerInventory.getFirstWeapon().item.type != ItemType::Null) {
+            playerHolding = playerInventory.getFirstWeapon().item.texturePath; // echipeaza primul weapon
+            cout << "DEBUG: equipped weapon: " << playerInventory.getFirstWeapon().item.name << endl; // afiseaza numele weapon-ului echipat
+        }
+    } else if (keysPressed[static_cast<int>(Keyboard::Key::Num2)]) {  // daca tasta 2 este apasata, echipeaza al doilea weapon din inventar
+        if (playerInventory.getSecondWeapon().item.type != ItemType::Null) {
+            playerHolding = playerInventory.getSecondWeapon().item.texturePath; // echipeaza al doilea weapon
+            cout << "DEBUG: equipped weapon: " << playerInventory.getSecondWeapon().item.name << endl; // afiseaza numele weapon-ului echipat
+        }
+    }
 }
 
 // -------------------------------------------------------------------- initializare --------------------------------------------------------------------
@@ -2085,31 +2110,38 @@ void drawPlayerAt(RenderWindow& window, float x, float y, float speed = 0, float
 }
 
 void drawItemInfo(sf::RenderWindow& window) {
-    if (nearbyItemIndex == -1) return;
-    if (worldItems[nearbyItemIndex].item.type == ItemType::Null) return;
+    // deseneaza informatiile despre itemul din apropiere
 
-    const std::string& itemName = worldItems[nearbyItemIndex].item.name;
-    const std::string& itemDesc = worldItems[nearbyItemIndex].item.description;
+    if (nearbyItemIndex == -1) return; // nu este niciun item in apropiere
+    if (worldItems[nearbyItemIndex].item.type == ItemType::Null) return; // nu este niciun item valid
 
+    const std::string& itemName = worldItems[nearbyItemIndex].item.name; // numele itemului
+    const std::string& itemDesc = worldItems[nearbyItemIndex].item.description; // descrierea itemului
+
+    // creeaza textul pentru nume si descriere
     sf::Text nameText(uiFont, itemName, 24);
     nameText.setFillColor(sf::Color::White);
     nameText.setStyle(sf::Text::Bold);
 
+    // creeaza textul pentru descriere
     sf::Text descText(uiFont, itemDesc, 18);
     descText.setFillColor(sf::Color(200, 200, 200));
 
+    // seteaza pozitia textului
     sf::FloatRect nameBounds = nameText.getLocalBounds();
     sf::FloatRect descBounds = descText.getLocalBounds();
 
     sf::Vector2f basePosition(worldItems[nearbyItemIndex].x + 20,
                             worldItems[nearbyItemIndex].y - 40);
 
+    // ajustam pozitia in functie de dimensiunea textului
     nameText.setPosition(basePosition);
     sf::RectangleShape underline(sf::Vector2f(nameBounds.size.x+ 10, 2));
     underline.setFillColor(sf::Color::White);
     underline.setPosition(sf::Vector2f(basePosition.x, basePosition.y + nameBounds.size.y + 10));
     descText.setPosition(sf::Vector2f(basePosition.x, basePosition.y + nameBounds.size.y + 10));
 
+    // creeaza un background pentru text
     float backgroundWidth = std::max(nameBounds.size.x, descBounds.size.x) + 20;
     float backgroundHeight = nameBounds.size.y + descBounds.size.y + 40;
 
@@ -2123,6 +2155,7 @@ void drawItemInfo(sf::RenderWindow& window) {
     window.draw(descText);
 }
 
+// aceasta functie e importanta pt a stii ce item are jucatorul echipat gen daca poate trage
 void drawPlayerWeapon(RenderWindow& window) {
     int handX = 214 - ((playerVx > 0)?30:0); // pozitia mainii pe axa x
 
@@ -2153,6 +2186,24 @@ void drawPlayerWeapon(RenderWindow& window) {
 
         swordHitbox1 = Vector2f(handX - cos(angle / 180 * 3.14f + 3.14f/2.0f) * 30, playerY - sin(angle / 180 * 3.14f + 3.14f/2.0f) * 30); // seteaza pozitia hitbox-ului sabiei (folosim vector2f)
         swordHitbox2 = Vector2f(handX - cos(angle / 180 * 3.14f + 3.14f/2.0f) * 37, playerY - sin(angle / 180 * 3.14f + 3.14f/2.0f) * 37); // seteaza pozitia hitbox-ului sabiei (folosim vector2f)
+
+        canFireArrows = false;
+    }
+    if (playerHolding == "weapon_basic_bow") {
+        Texture& texture = TextureManager::getInstance().find("weapon_basic_bow");
+        Sprite sprite(texture);
+        sprite.setOrigin(Vector2f(texture.getSize().x / 2, texture.getSize().y / 3 * 2)); // seteaza originea sprite-ului la mijloc
+        sprite.setScale(Vector2f(0.11f, 0.11f)); // seteaza scalarea sprite-ului
+        sprite.setPosition(Vector2f(handX, playerY)); // seteaza pozitia sprite-ului (folosim vector2f)
+
+        // Calculeaza unghiul de rotatie catre mouse
+        float angle = atan2(mouseY - playerY, mouseX - (handX)) * 180 / 3.14159f + 90; // +90 pentru a alinia sprite-ul
+        sprite.setRotation(sf::degrees(angle)); // seteaza rotatia sprite-ului
+
+        window.draw(sprite); // deseneaza sprite-ul
+
+        canFireArrows = true; // pt ca are arc
+        arrowType = "arrow_basic"; // seteaza tipul de sageata la sageata de bazass
     }
 }
 void drawCoins(RenderWindow& window) {
