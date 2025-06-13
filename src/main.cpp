@@ -1833,7 +1833,10 @@ private:
     // Special attack when hands are destroyed
     bool headCanAttack = false;
     Vector2f headNeutralPosition;
+    float headNeutralPositionVx = 0.0f; // Neutral position for head, used for AI movement
+    float headNeutralPositionVy = 0.0f; // Neutral position for head, used for AI movement
 
+    EnemyBrain ai; // AI for Skeletron
 public:
     EnemySkeletron(float x, float y)
         : Enemy(x, y, getX(), getY(), false), worldPosition(x, y),
@@ -1841,18 +1844,18 @@ public:
         //float delayFactor, string textureName, 
         //string attackTextureName, float spriteSize, 
         //bool rotate, bool flipped = false, float desiredRotation = 0
-          head(x, y, 4.0f, 0.04f, "Boss_Head", "", 128.f, false),
-          upperArmLeft(x - 50, y + 50, 5.0f, 0.11f, 
+        head(x, y, 4.0f, 0.04f, "Boss_Head", "", 128.f, false),
+        upperArmLeft(x - 50, y + 50, 5.0f, 0.11f, 
             "Boss_Arm_UpperVertical", "", 64.f, true, false, 45.f),
-          lowerArmLeft(x - 80, y + 100, 4.5f, 0.085f, 
+        lowerArmLeft(x - 80, y + 100, 4.5f, 0.085f, 
             "Boss_Arm_Vertical", "", 64.f, true, false, 135.f),
-          palmLeft(x - 80, y + 140, 4.2f, 0.075f, 
+        palmLeft(x - 80, y + 140, 4.2f, 0.075f, 
             "Boss_Hand_Left", "Boss_PalmAttackt", 64.f, true, false),
-          upperArmRight(x + 50, y + 50, 5.0f, 0.11f, 
+        upperArmRight(x + 50, y + 50, 5.0f, 0.11f, 
             "Boss_Arm_UpperVertical", "", 64.f, true, true, -45.f),
-          lowerArmRight(x + 80, y + 100, 4.5f, 0.085f, 
+        lowerArmRight(x + 80, y + 100, 4.5f, 0.085f, 
             "Boss_Arm_Vertical", "", 64.f, true, true, -135.f),
-          palmRight(x + 80, y + 140, 4.2f, 0.075f, 
+        palmRight(x + 80, y + 140, 4.2f, 0.075f, 
             "Boss_Hand_Left", "Boss_PalmAttackt", 64.f, true, true)
     {
         maxHealth = 500;
@@ -1904,7 +1907,7 @@ public:
     void update(float dt, Vector2f playerPos) {
         //palmRight.takeDamage(150);
         //palmLeft.takeDamage(150);
-        //headCanAttack = true;
+        // headCanAttack = true;
         // Store head neutral position
 
         worldPosition.x += playerVx;
@@ -1920,6 +1923,41 @@ public:
 
         headNeutralPosition.x += playerVx;
 
+        // go towards player but use ai too
+        auto angleToPlayer = atan2(playerY - headNeutralPosition.y, 200 - headNeutralPosition.x); // calculate angle to player (from 0 to 360)
+        angleToPlayer *= 180 / M_PI; // convert to degrees
+        angleToPlayer = fmod(angleToPlayer + 360, 360); // normalize to [0, 360)
+        auto aiResult = ai.result(playerHealth / playerMaxHealth, headNeutralPosition.x, headNeutralPosition.y, 200, playerY, angleToPlayer);
+        // aiResult[0]: move towards (1) or away (0), aiResult[1]: angle in degrees
+        bool moveTowardsPlayer = (aiResult[0] > 0);
+        float moveAngle = aiResult[1] * M_PI / 180; // convert to radians
+        if (moveTowardsPlayer) {
+            // move towards player
+            headNeutralPositionVx += cos(moveAngle) * dt;
+            headNeutralPositionVy += sin(moveAngle) * dt;
+        } else {
+            // move away from player
+            headNeutralPositionVx -= cos(moveAngle) * dt;
+            headNeutralPositionVy -= sin(moveAngle) * dt;
+        }
+        // if too far from player, move towards player
+        float distToPlayer = std::hypot(headNeutralPosition.x - playerPos.x, headNeutralPosition.y - playerPos.y);
+        if (distToPlayer > 300.f) {
+            // Move towards player if too far
+            float angleToPlayer = atan2(playerPos.y - headNeutralPosition.y, playerPos.x - headNeutralPosition.x);
+            headNeutralPositionVx += cos(angleToPlayer) * dt * 2.0f; // Move faster towards player
+            headNeutralPositionVy += sin(angleToPlayer) * dt * 2.0f;
+        }
+        // if under player, move up a little
+        if (headNeutralPosition.y < playerY) {
+            headNeutralPositionVy += 1;
+        }
+        // add vx and vy to head neutral position
+        headNeutralPosition.x += headNeutralPositionVx;
+        headNeutralPosition.y += headNeutralPositionVy;
+        // friction
+        headNeutralPositionVx *= 0.95f; // Apply friction to x velocity
+        headNeutralPositionVy *= 0.95f; // Apply friction to y velocity
 
         // Head follows neutral position when not attacking
         if (headAttack.state != AttackState::ATTACKING) {
@@ -1997,7 +2035,7 @@ public:
 private:
 
     void bridgeArm(SkeletronPart& upper, SkeletronPart& lower,
-                   const Vector2f& base, SkeletronPart& palm, float dt) {
+                const Vector2f& base, SkeletronPart& palm, float dt) {
         if (!palm.active) return;
         
         Vector2f dir = palm.position - base;
@@ -2012,7 +2050,7 @@ private:
     }
 
     void updateAttackState(float dt, Vector2f playerPos, AttackState& state, 
-                          SkeletronPart& part, bool isHead = false) {
+                        SkeletronPart& part, bool isHead = false) {
         switch (state.state) {
             case AttackState::IDLE:
                 state.currentCooldown -= dt;
@@ -2062,7 +2100,7 @@ private:
         // Check palm left collision during attack
         if (palmLeft.active && leftHandAttack.state == AttackState::ATTACKING) {
             float dist = std::hypot(palmLeft.position.x - playerX, 
-                                   palmLeft.position.y - playerY);
+                                palmLeft.position.y - playerY);
             if (dist < collisionRadius && !leftHandAttack.hasDamaged) {
                 // Damage player
                 leftHandAttack.hasDamaged = true;
@@ -2073,7 +2111,7 @@ private:
         // Check palm right collision
         if (palmRight.active && rightHandAttack.state == AttackState::ATTACKING) {
             float dist = std::hypot(palmRight.position.x - playerX, 
-                                   palmRight.position.y - playerY);
+                                palmRight.position.y - playerY);
             if (dist < collisionRadius && !rightHandAttack.hasDamaged) {
                 rightHandAttack.hasDamaged = true;
                 // player.takeDamage(20);
@@ -2083,12 +2121,31 @@ private:
         // Check head collision during attack
         if (headCanAttack && headAttack.state == AttackState::ATTACKING) {
             float dist = std::hypot(head.position.x - playerX, 
-                                   head.position.y - playerY);
+                                head.position.y - playerY);
             if (dist < collisionRadius && !headAttack.hasDamaged) {
                 headAttack.hasDamaged = true;
                 // player.takeDamage(30); // Head does more damage
             }
         }
+    }
+public:
+    void killAllParts() {
+        // head.active = false;
+        upperArmLeft.active = false;
+        lowerArmLeft.active = false;
+        palmLeft.active = false;
+        upperArmRight.active = false;
+        lowerArmRight.active = false;
+        palmRight.active = false;
+        // make them take lottta damage too
+        // head.takeDamage(1000);
+        upperArmLeft.takeDamage(1000);
+        lowerArmLeft.takeDamage(1000);
+        palmLeft.takeDamage(1000);
+        upperArmRight.takeDamage(1000);
+        lowerArmRight.takeDamage(1000);
+        palmRight.takeDamage(1000);
+        headCanAttack = true;
     }
 };
 
@@ -2576,8 +2633,8 @@ void init() {
         }
     }
 
-    mapSkeletron = new EnemySkeletron(100, 100);
-
+    mapSkeletron = new EnemySkeletron(300, 300); // ! debug
+    // mapSkeletron->killAllParts();
 }
 
 // -------------------------------------------------------------------- update --------------------------------------------------------------------
