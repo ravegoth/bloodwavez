@@ -3074,7 +3074,7 @@ void updateEnemySpawns(RenderWindow& window) {
     }
     // if level between 1000-2000, spawn baphomets every 500 frames
     else if (levelProgress >= 1000 && levelProgress < 2000) {
-        if (frameCount % 500 == 0) {s
+        if (frameCount % 500 == 0) {
             mapBaphomets.push_back(EnemyBaphomet(800, rand_uniform(50, 550)));
             cout << "DEBUG: Spawned baphomet cuz progress = " << levelProgress << std::endl;
         }
