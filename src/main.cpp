@@ -1627,6 +1627,76 @@ public:
     }
 };
 
+// clasa de decoratiuni
+class Decoration {
+private:
+    float x, y;       // coordonatele decoratiunii
+    bool toBeDeleted = false; // flag pentru autodistrugere
+public:
+    sf::Sprite sprite; // sprite-ul decoratiunii
+    // constructor
+    Decoration(float x, float y, const std::string& textureName) : x(x), y(y), sprite(TextureManager::getInstance().find(textureName)) {
+        sprite.setPosition(Vector2f(x, y));
+    }
+
+    // metoda pentru desenarea decoratiunii
+    void draw(RenderWindow& window) { // and update() tot in aceelasi
+        if (!toBeDeleted) {
+
+            // set its position
+            sprite.setPosition(Vector2f(x, y)); // seteaza pozitia sprite-ului
+            // set it to 20x20
+            sprite.setScale(Vector2f(30.0f / sprite.getTexture().getSize().x, 30.0f / sprite.getTexture().getSize().y)); // seteaza scalarea sprite-ului
+
+            // draw the sprite
+            window.draw(sprite);
+        }
+
+        this->x += playerVx; // se misca in functie de player
+
+        if (x < -600) {
+            toBeDeleted = true; // autodistruge decoratiunea daca iese din ecran
+            cout << "DEBUG: Decoration (" << x << ", " << y << ") is set for deletion (e departe)" << endl;
+        }
+    }
+
+    // metoda pentru setarea pozitiei
+    void setPosition(float newX, float newY) {
+        x = newX;
+        y = newY;
+        sprite.setPosition(Vector2f(x, y));
+    }
+
+    // metoda pentru autodistrugere
+    void setForDelete() {
+        toBeDeleted = true;
+    }
+
+    // metoda pentru verificarea autodistrugerii
+    bool isToBeDeleted() const {
+        return toBeDeleted;
+    }
+
+    // metoda pentru setarea scalei
+    void setScale(float scaleX, float scaleY) {
+        sprite.setScale(Vector2f(scaleX, scaleY));
+    }
+
+    // metoda pentru setarea rotatiei
+    void setRotation(float angle) {
+        sprite.setRotation(sf::degrees(angle));
+    }
+
+    // metoda pentru setarea texturii
+    void setTexture(const std::string& textureName) {
+        sprite.setTexture(TextureManager::getInstance().find(textureName));
+    }
+
+    ~Decoration() {
+        // destructor
+    }
+};
+
 // clasa de exp
 class ExpOrb {
 private:
@@ -2522,6 +2592,7 @@ public:
 
 vector<Object> mapObjects;  // container pentru obiectele din harta
 vector<Tile> mapTiles;      // container pentru tile-urile din harta
+vector<Decoration> mapDecorations; // container pentru decoratiunile din harta
 vector<Coin> mapCoins;     // container pentru monedele din harta
 vector<ExpOrb> mapExpOrbs; // container pentru orb-urile de exp din harta
 // inamici & entitati
@@ -2594,17 +2665,17 @@ void controls(RenderWindow& window) {
     //     mapExpOrbs.push_back(ExpOrb(500, 300)); // adauga un exp orb la coordonatele 500, 300
     // }
 
-    // debug: X = spawns goblin at 500, 300
-    if (keysPressed[static_cast<int>(Keyboard::Key::X)] && frameCount % 10 == 0) {  // daca tasta X este apasata si frameCount % 10 == 0
-        mapGoblins.push_back(EnemyGoblin(500, 300, 100, 10, true)); // adauga un goblin la coordonatele 500, 300
-        cout << "DEBUG: spawned goblin at 500, 300" << endl; // afiseaza mesaj de spawn
-    }
+    // // debug: X = spawns goblin at 500, 300
+    // if (keysPressed[static_cast<int>(Keyboard::Key::X)] && frameCount % 10 == 0) {  // daca tasta X este apasata si frameCount % 10 == 0
+    //     mapGoblins.push_back(EnemyGoblin(500, 300, 100, 10, true)); // adauga un goblin la coordonatele 500, 300
+    //     cout << "DEBUG: spawned goblin at 500, 300" << endl; // afiseaza mesaj de spawn
+    // }
 
-    // debug: B = spawns baphomet at 600, 300
-    if (keysPressed[static_cast<int>(Keyboard::Key::B)] && frameCount % 10 == 0) {  // daca tasta B este apasata si frameCount % 10 == 0
-        mapBaphomets.push_back(EnemyBaphomet(600, 300)); // adauga un baphomet la coordonatele 600, 300
-        cout << "DEBUG: spawned baphomet at 600, 300" << endl; // afiseaza mesaj de spawn
-    }
+    // // debug: B = spawns baphomet at 600, 300
+    // if (keysPressed[static_cast<int>(Keyboard::Key::B)] && frameCount % 10 == 0) {  // daca tasta B este apasata si frameCount % 10 == 0
+    //     mapBaphomets.push_back(EnemyBaphomet(600, 300)); // adauga un baphomet la coordonatele 600, 300
+    //     cout << "DEBUG: spawned baphomet at 600, 300" << endl; // afiseaza mesaj de spawn
+    // }
 
     // cout << "dashing data: " << "dashing: " << dashing << " canDash: " << canDash << " dashDuration: " << dashDuration << " dashCooldown: " << dashCooldown << endl;
 
@@ -2666,6 +2737,28 @@ void init() {
     TextureManager::getInstance().justLoad("Goblinset");
     // enemy baphomet
     TextureManager::getInstance().justLoad("Baphometset");
+    // justLoad all the files that start with "decoration_"
+    for (const auto& entry : std::filesystem::directory_iterator("./res/")) {
+        if (entry.path().filename().string().find("decoration_") == 0) {
+            // delete the extra .png from the filename
+            string filename = entry.path().filename().string();
+            filename = filename.substr(0, filename.find_last_of('.')); // remove the .png extension
+            // load the texture
+            cout << "DEBUG: loading decoration texture: " << filename << endl;
+            TextureManager::getInstance().justLoad(filename);
+        }
+    }
+    // justLoad all the files that start with "arrow_"
+    for (const auto& entry : std::filesystem::directory_iterator("./res/")) {
+        if (entry.path().filename().string().find("arrow_") == 0) {
+            // delete the extra .png from the filename
+            string filename = entry.path().filename().string();
+            filename = filename.substr(0, filename.find_last_of('.')); // remove the .png extension
+            // load the texture
+            cout << "DEBUG: loading arrow texture: " << filename << endl;
+            TextureManager::getInstance().justLoad(filename);
+        }
+    }
 
     // backgroud music
     bgmManager::getInstance().loadAll();
@@ -2720,12 +2813,11 @@ void init() {
 // -------------------------------------------------------------------- update --------------------------------------------------------------------
 
 void updateArrows(RenderWindow& window);
-
 void updateProgress(RenderWindow& window);
-
 void updateEnemySpawns(RenderWindow& window);
+void updateDecorationSpawns(RenderWindow& window);
 
-void update(RenderWindow& window) {
+void update(RenderWindow& window) { // ! MAIN UPDATE --------------------------
     // limiteaza pozitia jucatorului in fereastra
     if (playerY < 0) playerY = 0;
     if (playerY > 600) playerY = 600;
@@ -2807,6 +2899,7 @@ void update(RenderWindow& window) {
     }
     // Handle pickup input
     
+    // asta trebuia la controls() dar ma rog...
     if (keysPressed[static_cast<int>(Keyboard::Key::E)]) {
         if (pressedE == false && nearbyItemIndex != -1 &&  worldItems[nearbyItemIndex].item.type != ItemType::Null) {
             if(worldItems[nearbyItemIndex].pickedUp == false && inventoryWindow.onAddItem(worldItems[nearbyItemIndex])){
@@ -2894,6 +2987,7 @@ void update(RenderWindow& window) {
 
     //cout<<mouseX<<" "<<mouseY<<endl;
 
+    // asta trebuia la controls() dar ma rog
     // allows switching between the player screen and the skill tree
     if (keysPressed[static_cast<int>(Keyboard::Key::P)]) {
         if (window.getView().getCenter()==playerView.getCenter() && skillTreeDown) {
@@ -2921,6 +3015,9 @@ void update(RenderWindow& window) {
 
     // update enemy spawns
     updateEnemySpawns(window);
+
+    // update decoration spawns
+    updateDecorationSpawns(window);
 }
 
 void updateArrows(RenderWindow& window) {
@@ -2984,6 +3081,152 @@ void updateEnemySpawns(RenderWindow& window) {
         if (frameCount % 200 == 0) {
             mapGoblins.push_back(EnemyGoblin(800, rand_uniform(50, 550), 100, 10, true));
             cout << "DEBUG: Spawned goblin cuz progress = " << levelProgress << std::endl;
+        }
+    }
+}
+
+void updateDecorationSpawns(RenderWindow& window) {
+    // from level 0 to 1000, spawn decoration_rock every 100 frames
+    if (levelProgress >= 0 && levelProgress < 1000) {
+        // every 100 frames, spawn decoration_small_rock
+        if (frameCount % 100 == 0 && playerVx < -0.1f) {
+            mapDecorations.push_back(Decoration(rand_uniform(800, 800), rand_uniform(50, 550), "decoration_small_rock"));
+            cout << "DEBUG: Spawned decoration_rock cuz progress = " << levelProgress << std::endl;
+        }
+        // every 300 frames, spawn decoration_bush
+        if (frameCount % 300 == 0 && playerVx < -0.1f) {
+            mapDecorations.push_back(Decoration(rand_uniform(800, 800), rand_uniform(50, 550), "decoration_bush"));
+            cout << "DEBUG: Spawned decoration_bush cuz progress = " << levelProgress << std::endl;
+        }
+        // every 360 frames, spawn decoration_bush_2
+        if (frameCount % 360 == 0 && playerVx < -0.1f) {
+            mapDecorations.push_back(Decoration(rand_uniform(800, 800), rand_uniform(50, 550), "decoration_bush_2"));
+            cout << "DEBUG: Spawned decoration_bush_2 cuz progress = " << levelProgress << std::endl;
+        }
+    }
+    else if (levelProgress >= 1000 && levelProgress < 2000) {
+        // from level 1000 to 2000, spawn decoration_small_rock every 150 frames
+        if (frameCount % 150 == 0 && playerVx < -0.1f) {
+            mapDecorations.push_back(Decoration(rand_uniform(800, 800), rand_uniform(50, 550), "decoration_small_rock"));
+            cout << "DEBUG: Spawned decoration_small_rock cuz progress = " << levelProgress << std::endl;
+        }
+        // spawn decoration_rock every 200 frames
+        if (frameCount % 200 == 0 && playerVx < -0.1f) {
+            mapDecorations.push_back(Decoration(rand_uniform(800, 800), rand_uniform(50, 550), "decoration_rock"));
+            cout << "DEBUG: Spawned decoration_rock cuz progress = " << levelProgress << std::endl;
+        }
+        // spawn decoration_bush every 400 frames
+        if (frameCount % 400 == 0 && playerVx < -0.1f) {
+            mapDecorations.push_back(Decoration(rand_uniform(800, 800), rand_uniform(50, 550), "decoration_bush"));
+            cout << "DEBUG: Spawned decoration_bush cuz progress = " << levelProgress << std::endl;
+        }
+        // spawn decoration_bush_2 every 500 frames
+        if (frameCount % 500 == 0 && playerVx < -0.1f) {
+            mapDecorations.push_back(Decoration(rand_uniform(800, 800), rand_uniform(50, 550), "decoration_bush_2"));
+            cout << "DEBUG: Spawned decoration_bush_2 cuz progress = " << levelProgress << std::endl;
+        }
+    }
+    else if (levelProgress >= 2000 && levelProgress < 5000) {
+        // from level 2000 to 3000, spawn decoration_small_rock every 200 frames
+        if (frameCount % 200 == 0 && playerVx < -0.1f) {
+            mapDecorations.push_back(Decoration(rand_uniform(800, 800), rand_uniform(50, 550), "decoration_small_rock"));
+            cout << "DEBUG: Spawned decoration_small_rock cuz progress = " << levelProgress << std::endl;
+        }
+        // spawn decoration_rock every 300 frames
+        if (frameCount % 300 == 0 && playerVx < -0.1f) {
+            mapDecorations.push_back(Decoration(rand_uniform(800, 800), rand_uniform(50, 550), "decoration_rock"));
+            cout << "DEBUG: Spawned decoration_rock cuz progress = " << levelProgress << std::endl;
+        }
+        // spawn decoration_bush every 500 frames
+        if (frameCount % 500 == 0 && playerVx < -0.1f) {
+            mapDecorations.push_back(Decoration(rand_uniform(800, 800), rand_uniform(50, 550), "decoration_bush"));
+            cout << "DEBUG: Spawned decoration_bush cuz progress = " << levelProgress << std::endl;
+        }
+        // spawn decoration_bush_2 every 600 frames
+        if (frameCount % 600 == 0 && playerVx < -0.1f) {
+            mapDecorations.push_back(Decoration(rand_uniform(800, 800), rand_uniform(50, 550), "decoration_bush_2"));
+            cout << "DEBUG: Spawned decoration_bush_2 cuz progress = " << levelProgress << std::endl;
+        }
+        // spawn blue flower every 450 frames
+        if (frameCount % 450 == 0 && playerVx < -0.1f) {
+            mapDecorations.push_back(Decoration(rand_uniform(800, 800), rand_uniform(50, 550), "decoration_blue_flower"));
+            cout << "DEBUG: Spawned decoration_blue_flower cuz progress = " << levelProgress << std::endl;
+        }
+    }
+    else if (levelProgress >= 5000 && levelProgress < 9000) {
+        // from level 5000 to 10000, spawn decoration_small_rock every 300 frames
+        if (frameCount % 500 == 0 && playerVx < -0.1f) {
+            mapDecorations.push_back(Decoration(rand_uniform(800, 800), rand_uniform(50, 550), "decoration_small_rock"));
+            cout << "DEBUG: Spawned decoration_small_rock cuz progress = " << levelProgress << std::endl;
+        }
+        // spawn decoration_rock every 400 frames
+        if (frameCount % 620 == 0 && playerVx < -0.1f) {
+            mapDecorations.push_back(Decoration(rand_uniform(800, 800), rand_uniform(50, 550), "decoration_rock"));
+            cout << "DEBUG: Spawned decoration_rock cuz progress = " << levelProgress << std::endl;
+        }
+        // spawn decoration_bush every 600 frames
+        if (frameCount % 720 == 0 && playerVx < -0.1f) {
+            mapDecorations.push_back(Decoration(rand_uniform(800, 800), rand_uniform(50, 550), "decoration_bush"));
+            cout << "DEBUG: Spawned decoration_bush cuz progress = " << levelProgress << std::endl;
+        }
+        // spawn decoration_bush_2 every 700 frames
+        if (frameCount % 830 == 0 && playerVx < -0.1f) {
+            mapDecorations.push_back(Decoration(rand_uniform(800, 800), rand_uniform(50, 550), "decoration_bush_2"));
+            cout << "DEBUG: Spawned decoration_bush_2 cuz progress = " << levelProgress << std::endl;
+        }
+        // scary items
+        // spawn decoration_bone every 130
+        if (frameCount % 130 == 0 && playerVx < -0.1f) {
+            mapDecorations.push_back(Decoration(rand_uniform(800, 800), rand_uniform(50, 550), "decoration_bone"));
+            cout << "DEBUG: Spawned decoration_bone cuz progress = " << levelProgress << std::endl;
+        }
+        // spawn decoration_bone_2 every 268
+        if (frameCount % 268 == 0 && playerVx < -0.1f) {
+            mapDecorations.push_back(Decoration(rand_uniform(800, 800), rand_uniform(50, 550), "decoration_bone_2"));
+            cout << "DEBUG: Spawned decoration_bone_2 cuz progress = " << levelProgress << std::endl;
+        }
+        // spawn decoration_long_bone every 350
+        if (frameCount % 350 == 0 && playerVx < -0.1f) {
+            mapDecorations.push_back(Decoration(rand_uniform(800, 800), rand_uniform(50, 550), "decoration_long_bone"));
+            cout << "DEBUG: Spawned decoration_long_bone cuz progress = " << levelProgress << std::endl;
+        }
+        // spawn decoration_long_bone_2 every 550
+        if (frameCount % 550 == 0 && playerVx < -0.1f) {
+            mapDecorations.push_back(Decoration(rand_uniform(800, 800), rand_uniform(50, 550), "decoration_long_bone_2"));
+            cout << "DEBUG: Spawned decoration_long_bone_2 cuz progress = " << levelProgress << std::endl;
+        }
+    }
+    else if (levelProgress >= 9000) {
+        // only scary items
+        // spawn decoration_bone every 100
+        if (frameCount % 100 == 0 && playerVx < -0.1f) {
+            mapDecorations.push_back(Decoration(rand_uniform(800, 800), rand_uniform(50, 550), "decoration_bone"));
+            cout << "DEBUG: Spawned decoration_bone cuz progress = " << levelProgress << std::endl;
+        }
+        // spawn decoration_bone_2 every 210
+        if (frameCount % 200 == 0 && playerVx < -0.1f) {
+            mapDecorations.push_back(Decoration(rand_uniform(800, 800), rand_uniform(50, 550), "decoration_bone_2"));
+            cout << "DEBUG: Spawned decoration_bone_2 cuz progress = " << levelProgress << std::endl;
+        }
+        // spawn decoration_long_bone every 280
+        if (frameCount % 280 == 0 && playerVx < -0.1f) {
+            mapDecorations.push_back(Decoration(rand_uniform(800, 800), rand_uniform(50, 550), "decoration_long_bone"));
+            cout << "DEBUG: Spawned decoration_long_bone cuz progress = " << levelProgress << std::endl;
+        }
+        // spawn decoration_long_bone_2 every 370
+        if (frameCount % 370 == 0 && playerVx < -0.1f) {
+            mapDecorations.push_back(Decoration(rand_uniform(800, 800), rand_uniform(50, 550), "decoration_long_bone_2"));
+            cout << "DEBUG: Spawned decoration_long_bone_2 cuz progress = " << levelProgress << std::endl;
+        }
+        // spawn decoration_bush_red every 80
+        if (frameCount % 80 == 0 && playerVx < -0.1f) {
+            mapDecorations.push_back(Decoration(rand_uniform(800, 800), rand_uniform(50, 550), "decoration_bush_red"));
+            cout << "DEBUG: Spawned decoration_bush_red cuz progress = " << levelProgress << std::endl;
+        }
+        // spawn decoration_rock every 666
+        if (frameCount % 666 == 0 && playerVx < -0.1f) {
+            mapDecorations.push_back(Decoration(rand_uniform(800, 800), rand_uniform(50, 550), "decoration_rock"));
+            cout << "DEBUG: Spawned decoration_rock cuz progress = " << levelProgress << std::endl;
         }
     }
 }
@@ -3293,6 +3536,21 @@ void drawArrows(RenderWindow& window) {
     }
 }
 
+void drawDecorations(RenderWindow& window) {
+    // draw all decorations
+    for (Decoration& decoration : mapDecorations) {
+        decoration.draw(window); // deseneaza decoratiunea
+
+    }
+
+    // Remove decorations marked for deletion
+    mapDecorations.erase(
+        std::remove_if(mapDecorations.begin(), mapDecorations.end(),
+            [](const Decoration& decoration) { return decoration.isToBeDeleted(); }),
+        mapDecorations.end()
+    );
+}
+
 // draw all enemies
 void drawEnemies(RenderWindow& window) {
     // GOBLINS
@@ -3319,7 +3577,7 @@ void drawEnemies(RenderWindow& window) {
         }
     }
 
-    //SKELETRON
+    // SKELETRON
     if (bossSpawned) {
         if (mapSkeletron != nullptr) {
             mapSkeletron->update(1.f, sf::Vector2f(200 + playerVx, playerY));
@@ -3419,6 +3677,9 @@ void draw(RenderWindow& window) {
     for (Tile& tile : mapTiles) {
         tile.draw(window);
     }
+
+    // decoratiuni
+    drawDecorations(window); // desenare decoratiuni
 
     // weapon
     drawPlayerWeapon(window); // desenare sabie la pozitia (210, playerY)
