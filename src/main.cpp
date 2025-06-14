@@ -1645,8 +1645,9 @@ public:
 
             // set its position
             sprite.setPosition(Vector2f(x, y)); // seteaza pozitia sprite-ului
-            // set it to 20x20
-            sprite.setScale(Vector2f(30.0f / sprite.getTexture().getSize().x, 30.0f / sprite.getTexture().getSize().y)); // seteaza scalarea sprite-ului
+            // set the width to 20 and maintain the aspect ratio for the height
+            float scaleFactor = 20.0f / sprite.getTexture().getSize().x;
+            sprite.setScale(Vector2f(scaleFactor, scaleFactor)); // seteaza scalarea sprite-ului
 
             // draw the sprite
             window.draw(sprite);
@@ -3073,7 +3074,7 @@ void updateEnemySpawns(RenderWindow& window) {
     }
     // if level between 1000-2000, spawn baphomets every 500 frames
     else if (levelProgress >= 1000 && levelProgress < 2000) {
-        if (frameCount % 500 == 0) {
+        if (frameCount % 500 == 0) {s
             mapBaphomets.push_back(EnemyBaphomet(800, rand_uniform(50, 550)));
             cout << "DEBUG: Spawned baphomet cuz progress = " << levelProgress << std::endl;
         }
