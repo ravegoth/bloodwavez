@@ -11,6 +11,11 @@
 #include <filesystem>         // pentru manipularea fisierelor si directoarelor
 #include <windows.h>          // pentru api-ul windows (winmain, ascundere fereastra cmd)
 #include <tlhelp32.h>         // pentru operatii pe procese si thread-uri in windows
+#include <random>             // pentru std::mt19937
+#include <optional>           // pentru std::optional
+#include <variant>            // pentru std::variant
+#include <type_traits>        // pentru std::is_same si alte tipuri de verificari
+
 
 // ------ alte fisiere
 #include "ai.h"
@@ -20,10 +25,6 @@
 #include <SFML/Window.hpp>    // pentru manipularea ferestrelor si evenimentelor
 #include <SFML/System.hpp>    // pentru functii de sistem (timp, thread-uri, etc.)
 #include <SFML/Audio.hpp>     // pentru gestionarea sunetelor si muzicii
-
-#include <optional>
-#include <variant>
-#include <type_traits>
 
 // -------------------------------------------------------------------- namespace --------------------------------------------------------------------
 using namespace std;
@@ -75,7 +76,7 @@ Vector2f swordHitbox2(0, 0); // hitbox-ul armei (sword2ss)
 int pickupRadius = 40; // raza de pickup pentru obiecte
 
 // arc
-bool canFireArrows = true; // flag pentru a verifica daca se poate trage cu arcul
+bool canFireArrows = false; // flag pentru a verifica daca se poate trage cu arcul
 string arrowType = "arrow_basic"; // tipul sagetii pe care o trage jucatorul
 int arrowSpeed = 5; // viteza sagetii
 int arrowDamage = 10; // damage-ul sagetii
@@ -114,6 +115,10 @@ int nearbyItemIndex;
 bool inventoryVisible = false;
 bool openedInventoryThisPress = false;
 bool pressedE = false;
+
+// boss spawnat
+bool bossSpawned = false; // flag pentru a verifica daca boss-ul a fost spawnat
+
 
 // ---------------------------------------------------- functii folosite de obiecte (forward decl) -----------------------------------------------------------
 
@@ -738,77 +743,88 @@ public:
     }
 };
 
-// TODO
-// class bgmManager {
-// private:
-//     Sound bgm; // obiectul pentru sunetul de fundal
-//     bool playing = false; // flag pentru a verifica daca muzica este redat
-//     map<string, SoundBuffer> soundBuffers; // mapa pentru a stoca buffer-ele de sunet incarcate
-//     string currentTrack; // numele melodiei curente
-//     // constructor privat pentru a preveni instantierea directa
-//     bgmManager() {
-//         SoundBuffer buffer;
-//         if (!buffer.loadFromFile("./res/default_bgm.wav")) { // Provide a default sound file
-//             cout << "Failed to load default BGM" << endl;
-//         } else {
-//             bgm.setBuffer(buffer); // Initialize bgm with the default buffer
-//             soundBuffers["default_bgm"] = buffer; // Store the buffer for reuse
-//         }
-//     }
+class bgmManager {
+public:
+    static bgmManager& getInstance() {
+        static bgmManager instance;
+        return instance;
+    }
 
-// public:
-//     // singleton pattern
-//     bgmManager(const bgmManager&) = delete;
-//     bgmManager& operator=(const bgmManager&) = delete;
+    // Load all BGM files from a directory matching the prefix (e.g., "bgmN.mp3")
+    void loadAll(const std::string& directory = "./res/", const std::string& prefix = "bgm", const std::string& ext = ".mp3") {
+        playlist.clear();
+        for (int i = 1; i <= 9; ++i) {
+            std::string filename = directory + prefix + std::to_string(i) + ext;
+            if (std::filesystem::exists(filename)) {
+                playlist.push_back(filename);
+                std::cout << "Loaded BGM: " << filename << std::endl;
+            } else {
+                std::cerr << "BGM file not found: " << filename << std::endl;
+            }
+        }
+        // seed random engine
+        rng.seed(time(nullptr));
+    }
 
-//     static bgmManager& getInstance() {
-//         static bgmManager instance; // instanta unica
-//         return instance;
-//     }
+    // Start playing a random track
+    void playRandom(int volume = 50) {
+        if (playlist.empty()) {
+            std::cerr << "Playlist is empty. Call loadAll() first." << std::endl;
+            return;
+        }
+        std::uniform_int_distribution<std::size_t> dist(0, playlist.size() - 1);
+        cout << "Randomly selecting BGM from playlist of size: " << playlist.size() << "\n";
+        currentIndex = dist(rng);
+        playCurrent(volume);
+        playing = true;
+    }
 
-//     // metoda pentru a incarca un sunet
-//     void loadBGM(const string& name, const string& filename) {
-//         string full_filename = "./res/" + filename + ".wav"; // adauga calea catre fisier
-//         if (soundBuffers.find(name) == soundBuffers.end()) {
-//             SoundBuffer buffer;
-//             if (!buffer.loadFromFile(full_filename)) { // incarca fisierul
-//                 cout << "Failed to load BGM: " << filename << endl;
-//                 return;
-//             }
-//             soundBuffers[name] = buffer; // adauga buffer-ul in mapa
-//             cout << "Loaded BGM: " << filename << endl;
-//         }
-//     }
+    // Stop playback
+    void stop() {
+        if (music && music->getStatus() == sf::Music::Status::Playing) {
+            music->stop();
+        }
+        playing = false;
+    }
 
-//     // metoda pentru a reda un sunet
-//     void playBGM(const string& name, int volume = 50) {
-//         if (currentTrack == name && playing) return; // daca melodia curenta este deja redata, nu face nimic
+    // Must be called periodically (e.g., each frame) to auto-advance
+    void update() {
+        if (music && playing && music->getStatus() == sf::Music::Status::Stopped) {
+            cout << "piesa s-a terminat, trecem la urmatoarea\n";
+            cout << "indexul curent: " << currentIndex << "\n";
+            playRandom(currentVolume);
+            cout << "am trecut la piesa: " << playlist[currentIndex] << "\n";
+        }
+    }
 
-//         if (soundBuffers.find(name) != soundBuffers.end()) {
-//             bgm.setBuffer(soundBuffers[name]); // seteaza buffer-ul pentru sunet
-//             bgm.setLoop(true); // seteaza redarea in bucla
-//             bgm.setVolume(volume); // seteaza volumul
-//             bgm.play(); // reda melodia
-//             currentTrack = name; // actualizeaza melodia curenta
-//             playing = true; // seteaza flag-ul de redare
-//         } else {
-//             cout << "BGM not found: " << name << endl;
-//         }
-//     }
+private:
+    bgmManager() : currentIndex(0), playing(false), currentVolume(50) {}
+    ~bgmManager() { stop(); }
+    bgmManager(const bgmManager&) = delete;
+    bgmManager& operator=(const bgmManager&) = delete;
 
-//     // metoda pentru a opri muzica
-//     void stopBGM() {
-//         bgm.stop();
-//         playing = false;
-//         currentTrack = "";
-//     }
+    // Play the track at currentIndex
+    void playCurrent(int volume) {
+        if (currentIndex >= playlist.size()) return;
+        if (!music) music = std::make_unique<sf::Music>();
+        if (!music->openFromFile(playlist[currentIndex])) {
+            std::cerr << "Failed to open BGM: " << playlist[currentIndex] << std::endl;
+            return;
+        }
+        music->setLooping(false);
+        music->setVolume(static_cast<float>(volume));
+        music->play();
+        playing = true;
+        currentVolume = volume;
+    }
 
-//     // destructor
-//     ~bgmManager() {
-//         stopBGM();
-//         soundBuffers.clear();
-//     }
-// };
+    std::vector<std::string> playlist;
+    std::unique_ptr<sf::Music> music;
+    std::mt19937 rng;
+    std::size_t currentIndex;
+    bool playing;
+    int currentVolume;
+};
 
 class Tile {
 private:
@@ -854,7 +870,7 @@ public:
         // factorul de scaling folosit este 1.25 deoarece stim ca fiecare tile esete 32/32 dar noi
         // avem celule de 40/40 in matrice deci 32*1.25=40
 
-        // if type == "grass1", draw ./res/grass1.png
+        // if type == "grass1"
         if (type == "grass1") {
             Texture& texture = TextureManager::getInstance().find("Tileset");
             Sprite sprite(texture,IntRect({0,0},{32,32}));
@@ -863,7 +879,7 @@ public:
             window.draw(sprite); // deseneaza sprite-ul
         }
 
-        // if type == "grass2", draw ./res/grass2.png
+        // if type == "grass2"
         if (type == "grass2") {
             Texture& texture = TextureManager::getInstance().find("Tileset");
             Sprite sprite(texture,IntRect({32,0},{32,32}));
@@ -872,10 +888,19 @@ public:
             window.draw(sprite); // deseneaza sprite-ul
         }
 
-        // if type == "grass3", draw ./res/grass3.png
+        // if type == "grass3"
         if (type == "grass3") {
             Texture& texture = TextureManager::getInstance().find("Tileset");
             Sprite sprite(texture,IntRect({0,32},{32,32}));
+            sprite.setPosition(Vector2f(x, y)); // seteaza pozitia (folosim vector2f)
+            sprite.setScale(Vector2f(1.25, 1.25));
+            window.draw(sprite); // deseneaza sprite-ul
+        }
+
+        // if type == "grass4"
+        if (type == "grass4") {
+            Texture& texture = TextureManager::getInstance().find("Tileset");
+            Sprite sprite(texture,IntRect({32,32},{32,32}));
             sprite.setPosition(Vector2f(x, y)); // seteaza pozitia (folosim vector2f)
             sprite.setScale(Vector2f(1.25, 1.25));
             window.draw(sprite); // deseneaza sprite-ul
@@ -1952,6 +1977,10 @@ public:
         if (headNeutralPosition.y < playerY) {
             headNeutralPositionVy += 1;
         }
+        // if in the left of the player (x < 200), move right a little
+        if (headNeutralPosition.x < 200) {
+            headNeutralPositionVx += 1;
+        }
         // add vx and vy to head neutral position
         headNeutralPosition.x += headNeutralPositionVx;
         headNeutralPosition.y += headNeutralPositionVy;
@@ -2064,7 +2093,7 @@ private:
                 break;
                 
             case AttackState::ATTACKING:
-                std::cout<<"attack ";
+                // std::cout<<"attack ";
                 state.timer -= dt;
                 state.hasDamaged = false;
                 part.follow(state.attackTarget, dt, true);
@@ -2423,6 +2452,13 @@ public:
                 }
             }
         }
+
+        // if arrow very out of bounds, delete it
+        if (x < -100 || x > 900 || y < -100 || y > 700) {
+            toBeDeleted = true; // Mark for deletion if arrow is too far out of bounds
+        }
+
+        x += playerVx; // Apply world movement to arrow's x position
     }
 
     void draw(sf::RenderWindow& window) {
@@ -2593,6 +2629,10 @@ void init() {
     // enemy baphomet
     TextureManager::getInstance().justLoad("Baphometset");
 
+    // backgroud music
+    bgmManager::getInstance().loadAll();
+    bgmManager::getInstance().playRandom(); 
+
     if (!uiFont.openFromFile("./res/PixelPurl.ttf")) { 
             std::cerr << "Error loading font!\n";
     }
@@ -2617,23 +2657,25 @@ void init() {
     playerVx = 0;
     playerVy = 0;
 
-    // 80x60
+    // 80x60 tileseturille din background
     for (int i = 0; i < 84/4; i++) {
         for (int j = 0; j < 64/4; j++) {
             mapTiles.push_back(Tile(i * 40 - 40, j * 40 - 40, 40, 40, Color::Black));
 
             auto random = rand_uniform(0, 100);
-            if (random < 8) { // 8% chance
-                mapTiles.back().setType("grass1");
-            } else if (random < 8 + 10) { // 10% chance
+            if (random < 20) { 
+                mapTiles.back().setType("grass4");
+            } else if (random < 40) { 
                 mapTiles.back().setType("grass3");
-            } else { // 82% chance
+            } else if (random < 80) {
                 mapTiles.back().setType("grass2");
+            } else {
+                mapTiles.back().setType("grass1");
             }
         }
     }
 
-    mapSkeletron = new EnemySkeletron(300, 300); // ! debug
+    // mapSkeletron = new EnemySkeletron(300, 300); // ! debug
     // mapSkeletron->killAllParts();
 }
 
@@ -2828,6 +2870,9 @@ void update(RenderWindow& window) {
     // update arrows
     arrowCooldown -= 1; // reduce cooldown by 1 frame
     updateArrows(window);
+
+    // update bgm
+    bgmManager::getInstance().update();
 }
 
 void updateArrows(RenderWindow& window) {
@@ -3174,11 +3219,15 @@ void drawEnemies(RenderWindow& window) {
     }
 
     //SKELETRON
-    mapSkeletron->update(1.f, sf::Vector2f(200 + playerVx, playerY));
-    mapSkeletron->draw(window);
+    if (bossSpawned) {
+        if (mapSkeletron != nullptr) {
+            mapSkeletron->update(1.f, sf::Vector2f(200 + playerVx, playerY));
+            mapSkeletron->draw(window);
+        }
 
-    if (mapSkeletron->isToBeDeleted()) {
-        delete mapSkeletron;
+        if (mapSkeletron->isToBeDeleted()) {
+            delete mapSkeletron;
+        }
     }
 }
 
