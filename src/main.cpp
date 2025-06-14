@@ -94,6 +94,7 @@ float dashDuration = 30; // durata dash-ului in cadre
 int dashCooldown = 60*3; // cooldown-ul dash-ului in frameuri
 
 int balance = 0; // numarul de $$$
+float moneyMultiplier = 1.0f; // multiplicatorul de bani al jucatorului
 int xp = 0; // xp-ul jucatorului
 int level = 1; // starting level
 int levelXP = 100; // xp-ul necesar pentru a urca la nivelul urmator
@@ -103,11 +104,16 @@ unsigned long long levelProgress = 0; // progresul la singurul nivel
 int playerHealth = 100; // viata jucatorului
 int playerMaxHealth = 100; // viata maxima a jucatorului
 int playerArmor = 0; // armura jucatorului
+int regenPer60Frames = 5; // regenerare la fiecare 60 de secunde
+float armorPowerMultiplier = 1.0f; // multiplicatorul de putere al armurii (scade damage-ul primit)s
 int playerMaxArmor = 100; // armura maxima a jucatorului
 float playerDamageMultiplier = 1; // muliplicatorul de damage al jucatorului care va fi inmultit cu damage-ul armei
 float totalDamageIncrease=0; // totalul de %damage increase al jucatorului
 
 bool skillTreeDown = true; // folosit pt schimbarea intre playerView si skillTreeView
+
+int speedSkillLevel = 0;
+std::vector<float> speedMultipliers = {1.0f, 1.01f, 1.02f, 1.03f, 1.04f, 1.06f};
 
 // folosit pt inventar si pickuping
 sf::Font uiFont;
@@ -1042,6 +1048,9 @@ public:
         if (health <= 0) {
             health = 0; // Ensure health doesn't go negative
             toBeDeleted = true;
+
+            // coinsOnDrop is multiplied with moneyMultiplier
+            coinsOnDrop = (int)((float)(coinsOnDrop) * moneyMultiplier); // Apply money multiplier to coins dropped
 
             // Drop XP and coins
             for (int i = 0; i < coinsOnDrop; ++i) {
@@ -2367,15 +2376,24 @@ public:
             window.draw(allocBack);
             window.draw(alloc);
 
-        }else node.setFillColor(Color::White); // daca nu mai suntem cu mouse-ul pe nod il facem inapoi alb
+        } else {
+            // cu outline negru
+            node.setOutlineColor(Color::Black);
+            node.setOutlineThickness(2);
+            node.setFillColor(Color::Yellow); // daca nu mai suntem cu mouse-ul pe nod il facem inapoi alb
+        }
 
         // daca am alocat toate punctele dintr-un nod il facem verde
         if (currentAlloc == maxAlloc) {
+            node.setOutlineColor(Color::Black);
+            node.setOutlineThickness(2);
             node.setFillColor(Color::Green);
         }
 
         // daca nu avem destul level pentru noduri atunci sunt facute rosu
         if (level<levelReq) {
+            node.setOutlineColor(Color::Black);
+            node.setOutlineThickness(2);
             node.setFillColor(Color::Red);
         }
 
@@ -2618,7 +2636,7 @@ void playerTakeDamage(int damage) {
     // daca are scut, scade din scut
     // daca nu are scut, scade din viata
     if (playerArmor > 0) {
-        playerArmor -= damage; // scade din scut
+        playerArmor -= (int)((float)(damage) / armorPowerMultiplier);
         if (playerArmor < 0) {
             playerHealth += playerArmor; // scade din viata
             playerArmor = 0; // seteaza scutul la 0
@@ -2864,6 +2882,10 @@ void update(RenderWindow& window) { // ! MAIN UPDATE --------------------------
         }
     }
 
+    // adjust based of speedMultipliers[speedSkillLevel]
+    playerVx *= speedMultipliers[speedSkillLevel];
+    playerVy *= speedMultipliers[speedSkillLevel];
+
     // actualizeaza pozitia jucatorului in functie de viteza si input-ul tastaturii
     playerX += playerVx;
     playerY += playerVy;
@@ -3019,6 +3041,14 @@ void update(RenderWindow& window) { // ! MAIN UPDATE --------------------------
 
     // update decoration spawns
     updateDecorationSpawns(window);
+
+    // regen every 60 fps
+    if (frameCount % 60 == 0 && playerHealth < playerMaxHealth) {
+        playerHealth += regenPer60Frames;
+        if (playerHealth > playerMaxHealth) {
+            playerHealth = playerMaxHealth; // Cap health at max health
+        }
+    }
 }
 
 void updateArrows(RenderWindow& window) {
@@ -3620,24 +3650,24 @@ void drawSkillTree(RenderWindow& window) {
     // generarea nodurilor
     int nrSkills = 10;
 
-    int x=-350,y=950, offx=200, offy=150; // x,y = pozitia nodului, offx,offy = offset-ul nodului
+    int x=-350,y=950, offx=200, offy=160; // x,y = pozitia nodului, offx,offy = offset-ul nodului
     int levelReq=1,levelScale=5;
 
     // initializare o singura data
     if (skills[0].getCost()==0) {
-        skills[0] = skillTreeNode(5,1, levelReq, "Test",x, y);
+        skills[0] = skillTreeNode(5, 1, levelReq, "Money +",x, y);
 
-        skills[1] = skillTreeNode(5,5, levelReq*levelScale, "Test",x+offx, y-offy);
-        skills[2] = skillTreeNode(5,5, levelReq*levelScale, "Test",x+offx, y);
-        skills[3] = skillTreeNode(5,5, levelReq*levelScale, "Test",x+offx, y+offy);
+        skills[1] = skillTreeNode(5, 2, levelReq*levelScale, "Viteza +", x+offx, y-offy);
+        skills[2] = skillTreeNode(5, 2, levelReq*levelScale, "Regen +", x+offx, y);
+        skills[3] = skillTreeNode(5, 2, levelReq*levelScale, "Defense +", x+offx, y+offy);
 
-        skills[4] = skillTreeNode(5,5, levelReq*levelScale*2, "Test",x+2*offx,y-offy);
-        skills[5] = skillTreeNode(5,5, levelReq*levelScale*2, "Test",x+2*offx,y);
-        skills[6] = skillTreeNode(5,5, levelReq*levelScale*2, "Test",x+2*offx,y+offy);
+        skills[4] = skillTreeNode(5, 3, levelReq*levelScale*2, "Neimplementat", x+2*offx,y-offy);
+        skills[5] = skillTreeNode(5, 3, levelReq*levelScale*2, "Neimplementat", x+2*offx,y);
+        skills[6] = skillTreeNode(5, 3, levelReq*levelScale*2, "Neimplementat", x+2*offx,y+offy);
 
-        skills[7] = skillTreeNode(5,5, levelReq*levelScale*3, "Test",x+3*offx,y-offy);
-        skills[8] = skillTreeNode(5,5, levelReq*levelScale*3, "Test",x+3*offx,y);
-        skills[9] = skillTreeNode(5,5, levelReq*levelScale*3, "Test",x+3*offx,y+offy);
+        skills[7] = skillTreeNode(5, 4, levelReq*levelScale*3, "Neimplementat", x+3*offx,y-offy);
+        skills[8] = skillTreeNode(5, 4, levelReq*levelScale*3, "Neimplementat", x+3*offx,y);
+        skills[9] = skillTreeNode(5, 4, levelReq*levelScale*3, "Neimplementat", x+3*offx,y+offy);
     }
 
 
@@ -3662,8 +3692,12 @@ void drawSkillTree(RenderWindow& window) {
         skills[i].allocate(window);
     }
 
-    //playerDamageMultiplier=1.0f + 1.0f * totalDamageIncrease/100;
-    //cout<<playerDamageMultiplier<<endl;
+    // implementare functionlitate skillpoints
+    moneyMultiplier = (float)((float)(skills[0].getCurrentAlloc())/5.0f + 1.0f);
+
+    speedSkillLevel = skills[1].getCurrentAlloc();
+    regenPer60Frames = (float)(skills[2].getCurrentAlloc());
+    armorPowerMultiplier = (float)((float)(skills[3].getCurrentAlloc())/8.0f + 1.0f);
 }
 
 void drawWorldItems(RenderWindow& window) {
