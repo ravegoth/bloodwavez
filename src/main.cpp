@@ -118,6 +118,8 @@ bool pressedE = false;
 
 // boss spawnat
 bool bossSpawned = false; // flag pentru a verifica daca boss-ul a fost spawnat
+// daca a spre sfarsit gen ultimul nivel
+bool inHell = false; // flag pentru a verifica daca jucatorul este in infern
 
 
 // ---------------------------------------------------- functii folosite de obiecte (forward decl) -----------------------------------------------------------
@@ -900,6 +902,42 @@ public:
         // if type == "grass4"
         if (type == "grass4") {
             Texture& texture = TextureManager::getInstance().find("Tileset");
+            Sprite sprite(texture,IntRect({32,32},{32,32}));
+            sprite.setPosition(Vector2f(x, y)); // seteaza pozitia (folosim vector2f)
+            sprite.setScale(Vector2f(1.25, 1.25));
+            window.draw(sprite); // deseneaza sprite-ul
+        }
+
+        // if type == "hell1"
+        if (type == "hell1") {
+            Texture& texture = TextureManager::getInstance().find("HellTileset");
+            Sprite sprite(texture,IntRect({0,0},{32,32}));
+            sprite.setPosition(Vector2f(x, y)); // seteaza pozitia (folosim vector2f)
+            sprite.setScale(Vector2f(1.25, 1.25));
+            window.draw(sprite); // deseneaza sprite-ul
+        }
+
+        // if type == "hell2"
+        if (type == "hell2") {
+            Texture& texture = TextureManager::getInstance().find("HellTileset");
+            Sprite sprite(texture,IntRect({32,0},{32,32}));
+            sprite.setPosition(Vector2f(x, y)); // seteaza pozitia (folosim vector2f)
+            sprite.setScale(Vector2f(1.25, 1.25));
+            window.draw(sprite); // deseneaza sprite-ul
+        }
+
+        // if type == "hell3"
+        if (type == "hell3") {
+            Texture& texture = TextureManager::getInstance().find("HellTileset");
+            Sprite sprite(texture,IntRect({0,32},{32,32}));
+            sprite.setPosition(Vector2f(x, y)); // seteaza pozitia (folosim vector2f)
+            sprite.setScale(Vector2f(1.25, 1.25));
+            window.draw(sprite); // deseneaza sprite-ul
+        }
+
+        // if type == "hell4"
+        if (type == "hell4") {
+            Texture& texture = TextureManager::getInstance().find("HellTileset");
             Sprite sprite(texture,IntRect({32,32},{32,32}));
             sprite.setPosition(Vector2f(x, y)); // seteaza pozitia (folosim vector2f)
             sprite.setScale(Vector2f(1.25, 1.25));
@@ -2683,6 +2721,10 @@ void init() {
 
 void updateArrows(RenderWindow& window);
 
+void updateProgress(RenderWindow& window);
+
+void updateEnemySpawns(RenderWindow& window);
+
 void update(RenderWindow& window) {
     // limiteaza pozitia jucatorului in fereastra
     if (playerY < 0) playerY = 0;
@@ -2873,6 +2915,12 @@ void update(RenderWindow& window) {
 
     // update bgm
     bgmManager::getInstance().update();
+
+    // update progress
+    updateProgress(window);
+
+    // update enemy spawns
+    updateEnemySpawns(window);
 }
 
 void updateArrows(RenderWindow& window) {
@@ -2886,6 +2934,59 @@ void updateArrows(RenderWindow& window) {
         playerArrows.end());
 }
 
+void updateProgress(RenderWindow& window) {
+    // if player moving to the right, world progress increases
+    if (playerVx < 0) { // se duce in dr
+        levelProgress += 1; // increment progress based on player's horizontal movement
+        cout << "DEBUG: Level progress: " << levelProgress << endl; // debug output for level progress
+        
+        if (levelProgress >= 9500 && !bossSpawned) { // spawn boss after 10,000 progress
+            bossSpawned = true;
+            mapSkeletron = new EnemySkeletron(500, 300); // spawn Skeletron boss
+            std::cout << "DEBUG: Boss spawned at progress: " << levelProgress << std::endl;
+        }
+    }
+
+    // if levelProgress > 9000, change all tiles types to hell1, hell2, hell3, hell4
+    if (levelProgress > 9000 && !inHell) {
+        cout << "DEBUG: Entering hell mode, changing tile types." << endl;
+        inHell = true;
+        for (Tile& tile : mapTiles) {
+            auto random = rand_uniform(0, 100);
+            if (random < 25) {
+                tile.setType("hell1");
+            } else if (random < 50) {
+                tile.setType("hell2");
+            } else if (random < 75) {
+                tile.setType("hell3");
+            } else {
+                tile.setType("hell4");
+            }
+        }
+    }
+}
+
+void updateEnemySpawns(RenderWindow& window) {
+    // if level between 500-1000, spawn goblins every 300 frames
+    if (levelProgress > 500 && levelProgress < 1000) {
+        if (frameCount % 300 == 0) {
+            mapGoblins.push_back(EnemyGoblin(800, rand_uniform(50, 550), 100, 5, true));
+            cout << "DEBUG: Spawned goblin cuz progress = " << levelProgress << std::endl;
+        }
+    }
+    // if level between 1000-2000, spawn baphomets every 500 frames
+    else if (levelProgress >= 1000 && levelProgress < 2000) {
+        if (frameCount % 500 == 0) {
+            mapBaphomets.push_back(EnemyBaphomet(800, rand_uniform(50, 550)));
+            cout << "DEBUG: Spawned baphomet cuz progress = " << levelProgress << std::endl;
+        }
+        // and spawn goblins every 200 frames
+        if (frameCount % 200 == 0) {
+            mapGoblins.push_back(EnemyGoblin(800, rand_uniform(50, 550), 100, 10, true));
+            cout << "DEBUG: Spawned goblin cuz progress = " << levelProgress << std::endl;
+        }
+    }
+}
 
 // -------------------------------------------------------------------- desenare --------------------------------------------------------------------
 void drawPlayerAt(RenderWindow& window, float x, float y, float speed = 0, float scale = 0.45f) {
