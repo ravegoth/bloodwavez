@@ -126,6 +126,8 @@ bool pressedE = false;
 
 // boss spawnat
 bool bossSpawned = false;  // flag pentru a verifica daca boss-ul a fost spawnat
+// bos batut?
+bool bossDefeated = false;  // flag pentru a verifica daca boss-ul a fost batut
 // daca a spre sfarsit gen ultimul nivel
 bool inHell = false;  // flag pentru a verifica daca jucatorul este in infern
 
@@ -419,11 +421,13 @@ public:
         titleText.setFont(font);
         titleText.setString("Inventory");
         titleText.setCharacterSize(24);
+        titleText.setFillColor(sf::Color::White);
 
         tooltipBackground.setFillColor(sf::Color(0, 0, 0, 220));
         tooltipText.setFont(font);
         tooltipText.setCharacterSize(14);
         tooltipText.setStyle(sf::Text::Regular | sf::Text::Italic);
+        tooltipText.setFillColor(sf::Color::White);
 
         updateBackgroundSize();
     }
@@ -471,6 +475,8 @@ public:
 
                 window.draw(tooltipBackground);
                 window.draw(shadow);
+                tooltipText.setFillColor(sf::Color::White);
+                window.draw(tooltipText);
             }
             return;
         }
@@ -484,8 +490,10 @@ public:
         window.draw(background);
 
         titleText.setPosition(background.getPosition() + Vector2f(PADDING, 5));
-        window.draw(titleText);
 
+        titleText.setFillColor(sf::Color::White);
+        tooltipText.setFillColor(sf::Color::White);
+        window.draw(titleText);
         window.draw(tooltipText);
 
         // weaponText should be under the title at the top with proper spacing
@@ -524,9 +532,10 @@ public:
             sf::Text shadow = tooltipText;
             shadow.setFillColor(sf::Color::Black);
             shadow.setPosition(tooltipText.getPosition() + Vector2f(1, 1));
-
             window.draw(tooltipBackground);
             window.draw(shadow);
+            tooltipText.setFillColor(sf::Color::White);
+            // cout << "DEBUG: SHOW TOOLTIP\n";
             window.draw(tooltipText);
         }
     }
@@ -2166,6 +2175,10 @@ public:
         }
     }
 
+    bool isTouchingPlayer() const {
+        return distance(position, Vector2f(200, playerY)) < (spriteSize / 2.f);
+    }
+
     bool takeDamage(int amount) {
         if (!active)
             return false;
@@ -2196,7 +2209,7 @@ public:
 };
 
 class EnemySkeletron : public Enemy {
-private:
+public:
     SkeletronPart head;
     SkeletronPart upperArmLeft;
     SkeletronPart lowerArmLeft;
@@ -2405,6 +2418,15 @@ public:
 
         // Check for collisions with player
         checkPlayerCollision();
+
+        // if palms not active, head can attack
+        if (!palmLeft.active && !palmRight.active) {
+            headCanAttack = true;  // Enable head attacks when both hands are destroyed
+        } else {
+            headCanAttack = false;  // Disable head attacks when at least one hand is active
+        }
+
+        // 
     }
 
     void draw(RenderWindow& window) {
@@ -2746,7 +2768,8 @@ public:
         }
     }
 
-    void update(vector<EnemyGoblin>& mapGoblins, vector<EnemyBaphomet>& mapBaphomets) {
+    void update(vector<EnemyGoblin>& mapGoblins, vector<EnemyBaphomet>& mapBaphomets, vector<EnemyReaper>& mapReapers, 
+                EnemySkeletron* mapSkeletron, bool bossSpawned) {
         if (toBeDeleted)
             return;
 
@@ -2813,6 +2836,33 @@ public:
                         reaper.takeDamage(playerDamageMultiplier * arrowDamage);
                         toBeDeleted = true;
                         break;
+                    }
+                }
+            }
+        }
+        if (!toBeDeleted) {  // Check Skeletron parts if not already hit another enemy
+            if (bossSpawned && mapSkeletron != nullptr) {
+                std::vector<SkeletronPart*> parts;
+                if (!mapSkeletron->palmLeft.active && !mapSkeletron->palmRight.active) {
+                    parts.push_back(&mapSkeletron->head);  // Add head only if both palms are inactive
+                    mapSkeletron->killAllParts(); // except head js to be sure
+                } else {
+                    parts.push_back(&mapSkeletron->palmLeft);
+                    parts.push_back(&mapSkeletron->palmRight);
+                }
+
+                for (SkeletronPart* part : parts) {
+                    if (part->active) {
+                        float partLeft = part->position.x - part->spriteSize / 2.0f;
+                        float partRight = part->position.x + part->spriteSize / 2.0f;
+                        float partTop = part->position.y - part->spriteSize / 2.0f;
+                        float partBottom = part->position.y + part->spriteSize / 2.0f;
+
+                        if (x >= partLeft && x <= partRight && y >= partTop && y <= partBottom) {
+                            part->takeDamage(playerDamageMultiplier * arrowDamage);
+                            toBeDeleted = true;
+                            break;
+                        }
                     }
                 }
             }
@@ -3315,11 +3365,31 @@ void update(RenderWindow& window) {  // ! MAIN UPDATE --------------------------
             playerHealth = playerMaxHealth;  // Cap health at max health
         }
     }
+
+    // if boss head is destroyed, bossDefeated = true;
+    if (mapSkeletron != nullptr && !mapSkeletron->head.active && (!bossDefeated)) {
+        bossDefeated = true;
+        std::cout << "DEBUG: Boss defeated!" << std::endl;
+        delete mapSkeletron;
+        mapSkeletron = nullptr;
+
+        // Reward player with coins and XP
+        for (int i = 0; i < 50; ++i) {
+            spawnCoinAt(400 + rand_uniform(-50, 50), 300 + rand_uniform(-50, 50));
+        }
+        for (int i = 0; i < 30; ++i) {
+            spawnXPAt(400 + rand_uniform(-50, 50), 300 + rand_uniform(-50, 50));
+        }
+
+        // message box cu you win
+        MessageBoxA(NULL, "You defeated the boss!", "Victory", MB_OK | MB_ICONINFORMATION);  // afiseaza mesaj de victorie
+    }
 }
 
 void updateArrows(RenderWindow& window) {
     for (auto& arrow : playerArrows) {
-        arrow.update(mapGoblins, mapBaphomets);  // update each arrow's position and check for collisions
+        // update each arrow's position and check for collisions
+        arrow.update(mapGoblins, mapBaphomets, mapReapers, mapSkeletron, bossSpawned);
     }
 
     // Remove arrows that are marked for deletion (hit edge or enemy)
@@ -3395,7 +3465,7 @@ void updateEnemySpawns(RenderWindow& window) {
         }
     }
     // bla bla end level
-    if (levelProgress >= 9000 && levelProgress < 10000) {
+    if (levelProgress >= 9000 && levelProgress < 10000 && (!bossDefeated)) {
         // if levelProgress > 9000, spawn reapers every 100 frames
         if (frameCount % 300 == 0) {
             mapReapers.push_back(EnemyReaper(800, rand_uniform(50, 550)));
@@ -3909,7 +3979,7 @@ void drawEnemies(RenderWindow& window) {
     }
 
     // SKELETRON
-    if (bossSpawned) {
+    if (bossSpawned && (!bossDefeated)) {
         if (mapSkeletron != nullptr) {
             mapSkeletron->update(1.f, sf::Vector2f(200 + playerVx, playerY));
             mapSkeletron->draw(window);
