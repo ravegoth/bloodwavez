@@ -3374,10 +3374,10 @@ void update(RenderWindow& window) {  // ! MAIN UPDATE --------------------------
         mapSkeletron = nullptr;
 
         // Reward player with coins and XP
-        for (int i = 0; i < 50; ++i) {
+        for (int i = 0; i < 100; ++i) {
             spawnCoinAt(400 + rand_uniform(-50, 50), 300 + rand_uniform(-50, 50));
         }
-        for (int i = 0; i < 30; ++i) {
+        for (int i = 0; i < 150; ++i) {
             spawnXPAt(400 + rand_uniform(-50, 50), 300 + rand_uniform(-50, 50));
         }
 
