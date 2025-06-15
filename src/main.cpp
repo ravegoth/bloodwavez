@@ -1246,13 +1246,13 @@ public:
         // not using distance, but using hitbox collision
         if (swordHitbox1.x > getX() - enemyWidth / 2 && swordHitbox1.x < getX() + enemyWidth / 2 && swordHitbox1.y > getY() - enemyHeight / 2 &&
             swordHitbox1.y < getY() + enemyHeight / 2) {
-            takeDamage(playerDamageMultiplier * damage);  // take damage from player
+            takeDamage(playerDamageMultiplier * currentHoldingSwordDamage);  // take damage from player
             vx += -7 * cos(angleToPlayer);                // knockback in the opposite direction of the player
             vy += -7 * sin(angleToPlayer);                // knockback in the opposite direction of the player
         }
         if (swordHitbox2.x > getX() - enemyWidth / 2 && swordHitbox2.x < getX() + enemyWidth / 2 && swordHitbox2.y > getY() - enemyHeight / 2 &&
             swordHitbox2.y < getY() + enemyHeight / 2) {
-            takeDamage(playerDamageMultiplier * damage);  // take damage from player
+            takeDamage(playerDamageMultiplier * currentHoldingSwordDamage);  // take damage from player
             vx += -7 * cos(angleToPlayer);                // knockback in the opposite direction of the player
             vy += -7 * sin(angleToPlayer);                // knockback in the opposite direction of the player
         }
@@ -2083,22 +2083,22 @@ public:
     float baseX;
 
     SkeletronPart(float x,
-                  float y,
-                  float followSpeed,
-                  float delayFactor,
-                  string textureName,
-                  string attackTextureName,
-                  float spriteSize,
-                  bool rotate,
-                  bool flipped = false,
-                  float desiredRotation = 0)
-        : position(x, y),
-          baseX(x),
-          velocity(0, 0),
-          followSpeed(followSpeed * 4),
-          delayFactor(delayFactor),
-          sprite(Sprite(TextureManager::getInstance().find(textureName))),
-          rotate(rotate) {
+                float y,
+                float followSpeed,
+                float delayFactor,
+                string textureName,
+                string attackTextureName,
+                float spriteSize,
+                bool rotate,
+                bool flipped = false,
+                float desiredRotation = 0)
+            : position(x, y),
+            baseX(x),
+            velocity(0, 0),
+            followSpeed(followSpeed * 4),
+            delayFactor(delayFactor),
+            sprite(Sprite(TextureManager::getInstance().find(textureName))),
+            rotate(rotate) {
         this->spriteSize = spriteSize;
         sprite.setOrigin(Vector2f(spriteSize / 2.f, spriteSize / 2.f));
         rotation = sf::degrees(0);
@@ -2256,18 +2256,18 @@ public:
 public:
     EnemySkeletron(float x, float y)
         : Enemy(x, y, getX(), getY(), false),
-          worldPosition(x, y),
-          // float x, float y, float followSpeed,
-          // float delayFactor, string textureName,
-          // string attackTextureName, float spriteSize,
-          // bool rotate, bool flipped = false, float desiredRotation = 0
-          head(x, y, 4.0f, 0.04f, "Boss_Head", "", 128.f, false),
-          upperArmLeft(x - 50, y + 50, 5.0f, 0.11f, "Boss_Arm_UpperVertical", "", 64.f, true, false, 45.f),
-          lowerArmLeft(x - 80, y + 100, 4.5f, 0.085f, "Boss_Arm_Vertical", "", 64.f, true, false, 135.f),
-          palmLeft(x - 80, y + 140, 4.2f, 0.075f, "Boss_Hand_Left", "Boss_PalmAttackt", 64.f, true, false),
-          upperArmRight(x + 50, y + 50, 5.0f, 0.11f, "Boss_Arm_UpperVertical", "", 64.f, true, true, -45.f),
-          lowerArmRight(x + 80, y + 100, 4.5f, 0.085f, "Boss_Arm_Vertical", "", 64.f, true, true, -135.f),
-          palmRight(x + 80, y + 140, 4.2f, 0.075f, "Boss_Hand_Left", "Boss_PalmAttackt", 64.f, true, true) {
+            worldPosition(x, y),
+            // float x, float y, float followSpeed,
+            // float delayFactor, string textureName,
+            // string attackTextureName, float spriteSize,
+            // bool rotate, bool flipped = false, float desiredRotation = 0
+            head(x, y, 4.0f, 0.04f, "Boss_Head", "", 128.f, false),
+            upperArmLeft(x - 50, y + 50, 5.0f, 0.11f, "Boss_Arm_UpperVertical", "", 64.f, true, false, 45.f),
+            lowerArmLeft(x - 80, y + 100, 4.5f, 0.085f, "Boss_Arm_Vertical", "", 64.f, true, false, 135.f),
+            palmLeft(x - 80, y + 140, 4.2f, 0.075f, "Boss_Hand_Left", "Boss_PalmAttackt", 64.f, true, false),
+            upperArmRight(x + 50, y + 50, 5.0f, 0.11f, "Boss_Arm_UpperVertical", "", 64.f, true, true, -45.f),
+            lowerArmRight(x + 80, y + 100, 4.5f, 0.085f, "Boss_Arm_Vertical", "", 64.f, true, true, -135.f),
+            palmRight(x + 80, y + 140, 4.2f, 0.075f, "Boss_Hand_Left", "Boss_PalmAttackt", 64.f, true, true) {
         maxHealth = 500;
         health = maxHealth;
         speed = 5.0f;
@@ -2426,7 +2426,82 @@ public:
             headCanAttack = false;  // Disable head attacks when at least one hand is active
         }
 
-        // 
+        // check for sword hitbox
+        // get damaged with playerDamageMultiplier * currentHoldingSwordDamage
+        if (swordHitbox1.x > head.position.x - head.spriteSize / 2 &&
+            swordHitbox1.x < head.position.x + head.spriteSize / 2 &&
+            swordHitbox1.y > head.position.y - head.spriteSize / 2 &&
+            swordHitbox1.y < head.position.y + head.spriteSize / 2 &&
+            headCanAttack) {
+            takeDamage(playerDamageMultiplier * currentHoldingSwordDamage, "head");
+            headNeutralPositionVx += 5 * cos(atan2(head.position.y - playerY, head.position.x - 200));
+            headNeutralPositionVy += 5 * sin(atan2(head.position.y - playerY, head.position.x - 200));
+        }
+
+        if (swordHitbox1.x > palmLeft.position.x - palmLeft.spriteSize / 2 &&
+            swordHitbox1.x < palmLeft.position.x + palmLeft.spriteSize / 2 &&
+            swordHitbox1.y > palmLeft.position.y - palmLeft.spriteSize / 2 &&
+            swordHitbox1.y < palmLeft.position.y + palmLeft.spriteSize / 2) {
+            takeDamage(playerDamageMultiplier * currentHoldingSwordDamage, "palmLeft");
+            headNeutralPositionVx += 5 * cos(atan2(palmLeft.position.y - playerY, palmLeft.position.x - 200));
+            headNeutralPositionVy += 5 * sin(atan2(palmLeft.position.y - playerY, palmLeft.position.x - 200));
+        }
+
+        if (swordHitbox1.x > palmRight.position.x - palmRight.spriteSize / 2 &&
+            swordHitbox1.x < palmRight.position.x + palmRight.spriteSize / 2 &&
+            swordHitbox1.y > palmRight.position.y - palmRight.spriteSize / 2 &&
+            swordHitbox1.y < palmRight.position.y + palmRight.spriteSize / 2) {
+            takeDamage(playerDamageMultiplier * currentHoldingSwordDamage, "palmRight");
+            headNeutralPositionVx += 5 * cos(atan2(palmRight.position.y - playerY, palmRight.position.x - 200));
+            headNeutralPositionVy += 5 * sin(atan2(palmRight.position.y - playerY, palmRight.position.x - 200));
+        }
+
+        if (swordHitbox2.x > head.position.x - head.spriteSize / 2 &&
+            swordHitbox2.x < head.position.x + head.spriteSize / 2 &&
+            swordHitbox2.y > head.position.y - head.spriteSize / 2 &&
+            swordHitbox2.y < head.position.y + head.spriteSize / 2 &&
+            headCanAttack) {
+            takeDamage(playerDamageMultiplier * currentHoldingSwordDamage, "head");
+            headNeutralPositionVx += 5 * cos(atan2(head.position.y - playerY, head.position.x - 200));
+            headNeutralPositionVy += 5 * sin(atan2(head.position.y - playerY, head.position.x - 200));
+        }
+
+        if (swordHitbox2.x > palmLeft.position.x - palmLeft.spriteSize / 2 &&
+            swordHitbox2.x < palmLeft.position.x + palmLeft.spriteSize / 2 &&
+            swordHitbox2.y > palmLeft.position.y - palmLeft.spriteSize / 2 &&
+            swordHitbox2.y < palmLeft.position.y + palmLeft.spriteSize / 2) {
+            takeDamage(playerDamageMultiplier * currentHoldingSwordDamage, "palmLeft");
+            headNeutralPositionVx += 5 * cos(atan2(palmLeft.position.y - playerY, palmLeft.position.x - 200));
+            headNeutralPositionVy += 5 * sin(atan2(palmLeft.position.y - playerY, palmLeft.position.x - 200));
+        }
+
+        if (swordHitbox2.x > palmRight.position.x - palmRight.spriteSize / 2 &&
+            swordHitbox2.x < palmRight.position.x + palmRight.spriteSize / 2 &&
+            swordHitbox2.y > palmRight.position.y - palmRight.spriteSize / 2 &&
+            swordHitbox2.y < palmRight.position.y + palmRight.spriteSize / 2) {
+            takeDamage(playerDamageMultiplier * currentHoldingSwordDamage, "palmRight");
+            headNeutralPositionVx += 5 * cos(atan2(palmRight.position.y - playerY, palmRight.position.x - 200));
+            headNeutralPositionVy += 5 * sin(atan2(palmRight.position.y - playerY, palmRight.position.x - 200));
+        }
+
+        // now the player takes damage if its part.itsTouchingPlayer() is true
+        if (palmLeft.active && palmLeft.isTouchingPlayer()) {
+            playerTakeDamage(60);  // Damage dealt by left palm
+            playerVx += -1 * cos(atan2(palmLeft.position.y - playerY, palmLeft.position.x - 200));
+            playerVy += -1 * sin(atan2(palmLeft.position.y - playerY, palmLeft.position.x - 200));
+        }
+
+        if (palmRight.active && palmRight.isTouchingPlayer()) {
+            playerTakeDamage(60);  // Damage dealt by right palm
+            playerVx += -1 * cos(atan2(palmRight.position.y - playerY, palmRight.position.x - 200));
+            playerVy += -1 * sin(atan2(palmRight.position.y - playerY, palmRight.position.x - 200));
+        }
+
+        if (headCanAttack && head.isTouchingPlayer()) {
+            playerTakeDamage(111);  // Damage dealt by head
+            playerVx += -4 * cos(atan2(head.position.y - playerY, head.position.x - 200));
+            playerVy += -4 * sin(atan2(head.position.y - playerY, head.position.x - 200));
+        }
     }
 
     void draw(RenderWindow& window) {
@@ -3039,6 +3114,7 @@ void init() {
     TextureManager::getInstance().justLoad("Playerset");
     // weapon textures
     TextureManager::getInstance().justLoad("weapon_basic_sword");
+    TextureManager::getInstance().justLoad("weapon_ice_sword");
     TextureManager::getInstance().justLoad("weapon_basic_bow");
     // equipment textures
     TextureManager::getInstance().justLoad("equipment_purple_gloves");
@@ -3101,8 +3177,9 @@ void init() {
     // mapObjects.push_back(Object(500, 300, 30, Color::Magenta));
     // mapObjects.push_back(Object(600, 170, 40, Color::Cyan));
 
-    worldItems.push_back(ItemObject(150, 150, 10, Item("Sword", "Basic sword", "weapon_basic_sword", ItemType::Weapon)));
-    worldItems.push_back(ItemObject(150, 180, 10, Item("Bow", "Basic bow", "weapon_basic_bow", ItemType::Weapon)));
+    worldItems.push_back(ItemObject(350, 150, 10, Item("Sword", "Basic sword, 11 damag", "weapon_basic_sword", ItemType::Weapon)));
+    worldItems.push_back(ItemObject(3000, 300, 11, Item("Sword", "Ice sword, 25 damag", "weapon_ice_sword", ItemType::Weapon)));
+    worldItems.push_back(ItemObject(350, 650, 10, Item("Bow", "Basic bow, 10 damage", "weapon_basic_bow", ItemType::Weapon)));
     worldItems.push_back(
         ItemObject(250, 250, 10, Item("Puple Gloves", "Puple forces lie within these gloves", "equipment_purple_gloves", ItemType::Equipment)));
 
@@ -3737,7 +3814,32 @@ void drawPlayerWeapon(RenderWindow& window) {
                                 playerY - sin(angle / 180 * 3.14f + 3.14f / 2.0f) * 37);  // seteaza pozitia hitbox-ului sabiei (folosim vector2f)
 
         canFireArrows = false;
+        currentHoldingSwordDamage = 11;
     }
+
+    if (playerHolding == "weapon_ice_sword") {
+        Texture& texture = TextureManager::getInstance().find("weapon_ice_sword");
+        Sprite sprite(texture);
+        sprite.setOrigin(Vector2f(texture.getSize().x / 2, texture.getSize().y / 3 * 2));  // seteaza originea sprite-ului la mijlocul X si 1/3 din Y (manerul)
+        sprite.setScale(Vector2f(0.11f, 0.11f));                                           // seteaza scalarea sprite-ului
+        sprite.setPosition(Vector2f(handX, playerY));                                      // seteaza pozitia sprite-ului (folosim vector2f)
+
+        // Calculeaza unghiul de rotatie catre mouse
+        float angle = atan2(mouseY - playerY, mouseX - (handX)) * 180 / 3.14159f + 90;  // +90 pentru a alinia sprite-ul
+        sprite.setRotation(sf::degrees(angle));                                         // seteaza rotatia sprite-ului
+
+        window.draw(sprite);  // deseneaza sprite-ul
+
+        swordHitbox1 = Vector2f(handX - cos(angle / 180 * 3.14f + 3.14f / 2.0f) * 30,
+                                playerY - sin(angle / 180 * 3.14f + 3.14f / 2.0f) * 30);  // seteaza pozitia hitbox-ului sabiei (folosim vector2f)
+        swordHitbox2 = Vector2f(handX - cos(angle / 180 * 3.14f + 3.14f / 2.0f) * 37,
+                                playerY - sin(angle / 180 * 3.14f + 3.14f / 2.0f) * 37);  // seteaza pozitia hitbox-ului sabiei (folosim vector2f)
+
+        canFireArrows = false;
+        currentHoldingSwordDamage = 25;  // Damage specific pentru ice sword
+    }
+
+
     if (playerHolding == "weapon_basic_bow") {
         Texture& texture = TextureManager::getInstance().find("weapon_basic_bow");
         Sprite sprite(texture);
