@@ -2381,7 +2381,7 @@ public:
         }
         // if too far from player, move towards player
         float distToPlayer = std::hypot(headNeutralPosition.x - playerPos.x, headNeutralPosition.y - playerPos.y);
-        if (distToPlayer > 300.f) {
+        if (distToPlayer > 200.f) {
             // Move towards player if too far
             float angleToPlayer = atan2(playerPos.y - headNeutralPosition.y, playerPos.x - headNeutralPosition.x);
             headNeutralPositionVx += cos(angleToPlayer) * dt * 2.0f;  // Move faster towards player
@@ -4101,7 +4101,7 @@ void drawDecorations(RenderWindow& window) {
 
     // Remove decorations marked for deletion
     mapDecorations.erase(std::remove_if(mapDecorations.begin(), mapDecorations.end(), [](const Decoration& decoration) { return decoration.isToBeDeleted(); }),
-                         mapDecorations.end());
+                        mapDecorations.end());
 }
 
 // draw all enemies
