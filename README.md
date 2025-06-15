@@ -18,5 +18,5 @@
 ## Build Instructions (Windows – SFML 3.0.0)
 
 1. Make sure you have a C++ compiler installed (e.g. `g++`) and added to your PATH. ([this](https://github.com/brechtsanders/winlibs_mingw/releases/download/14.2.0posix-19.1.1-12.0.0-ucrt-r2/winlibs-x86_64-posix-seh-gcc-14.2.0-mingw-w64ucrt-12.0.0-r2.7z)) (and python3 too)
-2. Download and extract [SFML 3.0.0](https://www.sfml-dev.org/download.php).
-3. Run `make.py` and add the paths. Then run the game from the terminal but from the main dir, not /bin
+2. Download and extract [SFML 3.0.0](https://www.sfml-dev.org/download.php). For the release version just set `RELEASE = true`.
+3. Run `make.py` and add the paths. Then run the game from the terminal but from the main dir, not /bin (`.\bin\bloodwavez.exe`)
