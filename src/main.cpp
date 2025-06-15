@@ -2389,7 +2389,7 @@ public:
         }
         // if under player, move up a little
         if (headNeutralPosition.y < playerY) {
-            headNeutralPositionVy += 1;
+            headNeutralPositionVy -= 1;
         }
         // if in the left of the player (x < 200), move right a little
         if (headNeutralPosition.x < 200) {
