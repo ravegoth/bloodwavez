@@ -9,6 +9,7 @@
 - `W A S D` – move
 - `E` – pickup items
 - `I` – inventory
+- `1` & `2` – switch weapons
 - `P` – toggle skill tree view
 - `Left Click` – use equipped weapon
 - `Space` – dash (has cooldown)
