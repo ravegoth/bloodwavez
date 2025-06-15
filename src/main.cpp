@@ -71,6 +71,7 @@ bool notMoving = true; // flag pentru miscarea jucatorului
 int playerSpeed = 1;              // viteza de miscare a jucatorului
 
 string playerHolding = "none"; // arma pe care o tine jucatorul init
+int currentHoldingSwordDamage = 10; // damage-ul sabiei pe care o tine jucatorul
 Vector2f swordHitbox1(0, 0); // hitbox-ul armei (sword1)
 Vector2f swordHitbox2(0, 0); // hitbox-ul armei (sword2ss)
 int pickupRadius = 40; // raza de pickup pentru obiecte
@@ -1342,7 +1343,7 @@ public:
         xpOnDrop         = 20 + rand() % 20;       // 20-39 XP
         coinsOnDrop      = 14;                     // twice goblin
         damage           = 12;                     // twice goblin's damage
-        maxHealth        = 60 + rand() % 20;       // 40-59 health
+        maxHealth        = 60 + rand() % 20;       // 60-79 Health
         health           = maxHealth;
         attackCooldownStart = attackCooldown = 20; // faster attacks
         isMelee          = true;
@@ -1455,13 +1456,13 @@ public:
         // check if sword hitboxes are inside enemy hitbox
         if (swordHitbox1.x > getX() - enemyWidth / 2 && swordHitbox1.x < getX() + enemyWidth / 2 &&
             swordHitbox1.y > getY() - enemyHeight / 2 && swordHitbox1.y < getY() + enemyHeight / 2) {
-            takeDamage(playerDamageMultiplier * 10); // take damage from player
+            takeDamage(playerDamageMultiplier * currentHoldingSwordDamage); // take damage from player
             vx += -7 * cos(towardsPlayerAngle.asRadians()); // knockback in the opposite direction of the player
             vy += -7 * sin(towardsPlayerAngle.asRadians()); // knockback in the opposite direction of the player
         }
         if (swordHitbox2.x > getX() - enemyWidth / 2 && swordHitbox2.x < getX() + enemyWidth / 2 &&
             swordHitbox2.y > getY() - enemyHeight / 2 && swordHitbox2.y < getY() + enemyHeight / 2) {
-            takeDamage(playerDamageMultiplier * 10); // take damage from player
+            takeDamage(playerDamageMultiplier * currentHoldingSwordDamage); // take damage from player
             vx += -7 * cos(towardsPlayerAngle.asRadians()); // knockback in the opposite direction of the player
             vy += -7 * sin(towardsPlayerAngle.asRadians()); // knockback in the opposite direction of the player
         }
@@ -1475,7 +1476,7 @@ public:
         angleToPlayer *= 180 / M_PI; // convert to degrees
         angleToPlayer = fmod(angleToPlayer + 360, 360); // normalize to [0, 360)
         auto aiResult = ai.result(playerHealth / playerMaxHealth, x, y, 200, playerY, angleToPlayer);
-        cout << "querying: " << playerHealth / playerMaxHealth << ", " << x << ", " << y << ", " << 200 << ", " << playerY << ", " << angleToPlayer << " result: " << aiResult[0] << ", " << aiResult[1] << endl;
+        // cout << "querying: " << playerHealth / playerMaxHealth << ", " << x << ", " << y << ", " << 200 << ", " << playerY << ", " << angleToPlayer << " result: " << aiResult[0] << ", " << aiResult[1] << endl;
         // o sa rezulte: aiResult[0] = 1 sau 0, 1 = te misti spre player, 0, nu si aiResult[1] = unghiul la care sa se miste
         auto moveTowardsPlayer = (aiResult[0] > 0.5);
         auto moveAngle = aiResult[1] * M_PI / 180; // convert to radians
@@ -1537,6 +1538,217 @@ public:
     }
 };
 
+class EnemyReaper : public Enemy {
+private:
+    EnemyBrain ai; // AI for Reaper
+public:
+    EnemyReaper(float x, float y)
+        : Enemy(x, y, /*health*/ 0, /*damage*/ 0, /*isMelee*/ true) {
+        // Reaper is twice as powerful and a bit faster than goblin
+        xpOnDrop         = 20 + rand() % 50;       // 
+        coinsOnDrop      = 30;                     // EVEN MOREEE
+        damage           = 35;                     // EVEN MOREEE
+        maxHealth        = 80 + rand() % 20;       // 60-79 healths
+        health           = maxHealth;
+        attackCooldownStart = attackCooldown = 20; // faster attacks
+        isMelee          = true;
+        speed            = 0.8f;                   // increased speed
+        maxSpeed         = 5.0f;                   // higher top speed
+        animation        = rand() % 100; // random animation start
+        toBeDeleted      = false;                 // not dead
+        canAttack        = true;
+        isAttacking      = false;
+        isAttackingAnimation = 0;
+        enemyWidth       = 52;                     // larger hitbox
+        enemyHeight      = 73;
+        attackRadius     = 70;                     // bigger reach
+        this->x = x;
+        this->y = y;
+        vx = vy = 0;
+        EnemyBrain ai = EnemyBrain(); // ai
+    }
+
+    void draw(RenderWindow& window) override {
+        // Load or retrieve Reaper textures
+        //individual size 82/128
+
+        Texture& mobTextureWalk1 = TextureManager::getInstance().find("enemy_reaper_walk_1");
+        Texture& mobTextureWalk2 = TextureManager::getInstance().find("enemy_reaper_walk_2");
+        Texture& mobTextureAttack = TextureManager::getInstance().find("enemy_reaper_attack");
+        // mirrors
+        Texture& mobTextureWalk1Mirror = TextureManager::getInstance().find("enemy_reaper_walk_1_mirror");
+        Texture& mobTextureWalk2Mirror = TextureManager::getInstance().find("enemy_reaper_walk_2_mirror");
+        Texture& mobTextureAttackMirror = TextureManager::getInstance().find("enemy_reaper_attack_mirror");
+
+        Sprite sprite = Sprite(mobTextureWalk1);
+
+        // draw (centered) at x, y
+        sprite.setPosition(Vector2f(this->enemyWidth / 2, this->enemyHeight / 2)); // center the sprite
+        // auto scale the sprite to 62x80 px
+        sprite.setScale(Vector2f(62.0f / mobTextureWalk1.getSize().x, 80.0f / mobTextureWalk1.getSize().y)); // scale the sprite
+
+        // draw
+        if (isAttackingAnimation > 0) {
+            // draw attack animation
+            if (getX() < 200) {
+                sprite.setTexture(mobTextureAttack); // set texture to attack
+            } else {
+                sprite.setTexture(mobTextureAttackMirror); // set texture to attack mirrored
+            }
+        } else {
+            // draw walk animation
+            if (animation % 50 < 25) {
+                if (getX() < 200) {
+                    // walk1 
+                    sprite.setTexture(mobTextureWalk1); // set texture to walk1
+                } else {
+                    // walk1 mirrored
+                    sprite.setTexture(mobTextureWalk1Mirror); // set texture to walk1 mirrored
+                }
+            } else {
+                if (getX() < 200) {
+                    // walk2
+                    sprite.setTexture(mobTextureWalk2); // set texture to walk2
+                } else {
+                    // walk2 mirrored
+                    sprite.setTexture(mobTextureWalk2Mirror); // set texture to walk2 mirrored
+                }
+            }
+        }
+
+        // set the position to x, y
+        sprite.setPosition(Vector2f(getX() - this->enemyWidth / 2, getY() - this->enemyHeight / 2)); // center the sprite
+        // draw the sprite
+        window.draw(sprite); // draw the sprite
+        // update animation
+        animation = (animation % 100) + 1;
+        if (isAttackingAnimation > 0) --isAttackingAnimation;
+    }
+
+    void update(RenderWindow& window) override {
+        if (toBeDeleted) return;
+
+        // cooldowns
+        if (attackCooldown > 0) --attackCooldown;
+        else canAttack = true;
+
+        // movement: home in
+        float dx = 200 - getX();
+        float dy = playerY - getY();
+        float dist = std::sqrt(dx*dx + dy*dy);
+        if (getX() < 200) vx += speed; else vx -= speed;
+        if (getY() < playerY) vy += speed; else vy -= speed;
+
+        // chaotic vertical jitter when animation hits a specific frame
+        if (animation == 2) {
+            vy += rand_uniform(-3.f, 3.f);
+        }
+
+        // clamp
+        vx = std::clamp(vx, -maxSpeed, maxSpeed);
+        vy = std::clamp(vy, -maxSpeed, maxSpeed);
+
+        // attack logic
+        if (dist < attackRadius && canAttack) {
+            isAttacking = true;
+            canAttack = false;
+            attackCooldown = attackCooldownStart;
+            isAttackingAnimation = 30;
+            playerTakeDamage(damage); // deal damage to player
+            // knockback player
+            playerVx += -4 * cos(atan2(dy, dx)); // knockback in the opposite direction of the player
+            playerVy += -4 * sin(atan2(dy, dx)); // knockback in the opposite direction of the player
+            SoundManager::getInstance().playSound("took_damage");
+        } else {
+            isAttacking = false;
+        }
+
+        // take damage logic from sword
+        Angle towardsPlayerAngle = sf::radians(atan2(dy, dx)); // angle towards player
+        // check if sword hitboxes are inside enemy hitbox
+        if (swordHitbox1.x > getX() - enemyWidth / 2 && swordHitbox1.x < getX() + enemyWidth / 2 &&
+            swordHitbox1.y > getY() - enemyHeight / 2 && swordHitbox1.y < getY() + enemyHeight / 2) {
+            takeDamage(playerDamageMultiplier * currentHoldingSwordDamage); // take damage from player
+            vx += -7 * cos(towardsPlayerAngle.asRadians()); // knockback in the opposite direction of the player
+            vy += -7 * sin(towardsPlayerAngle.asRadians()); // knockback in the opposite direction of the player
+        }
+        if (swordHitbox2.x > getX() - enemyWidth / 2 && swordHitbox2.x < getX() + enemyWidth / 2 &&
+            swordHitbox2.y > getY() - enemyHeight / 2 && swordHitbox2.y < getY() + enemyHeight / 2) {
+            takeDamage(playerDamageMultiplier * currentHoldingSwordDamage); // take damage from player
+            vx += -7 * cos(towardsPlayerAngle.asRadians()); // knockback in the opposite direction of the player
+            vy += -7 * sin(towardsPlayerAngle.asRadians()); // knockback in the opposite direction of the player
+        }
+
+        // apply movement
+        x += vx * 0.8f + playerVx;
+        y += vy * 0.8f;
+
+        // move based on AI
+        auto angleToPlayer = atan2(playerY - y, 200 - x); // calculate angle to player (from 0 to 360)
+        angleToPlayer *= 180 / M_PI; // convert to degrees
+        angleToPlayer = fmod(angleToPlayer + 360, 360); // normalize to [0, 360)
+        auto aiResult = ai.result(playerHealth / playerMaxHealth, x, y, 200, playerY, angleToPlayer);
+        // cout << "querying: " << playerHealth / playerMaxHealth << ", " << x << ", " << y << ", " << 200 << ", " << playerY << ", " << angleToPlayer << " result: " << aiResult[0] << ", " << aiResult[1] << endl;
+        // o sa rezulte: aiResult[0] = 1 sau 0, 1 = te misti spre player, 0, nu si aiResult[1] = unghiul la care sa se miste
+        auto moveTowardsPlayer = (aiResult[0] > 0.5);
+        auto moveAngle = aiResult[1] * M_PI / 180; // convert to radians
+        if (moveTowardsPlayer) {
+            // move towards player
+            vx += speed * cos(moveAngle) * 1.1f;
+            vy += speed * sin(moveAngle) * 1.1f;
+        } else {
+            // move away from player
+            vx -= speed * cos(moveAngle) * 1.1f;
+            vy -= speed * sin(moveAngle) * 1.1f;
+        }
+
+        // if Reaper out of bounds, push it back
+        if (x < 0) x = 0, vx += 1;
+        if (x > 800) x = 800, vx -= 1;
+        if (y < 0) y = 0, vy += 1;
+        if (y > 600) y = 600, vy -= 1;
+    }
+
+    float getEnemyWidth() const { return enemyWidth; } // getter for enemy width
+    float getEnemyHeight() const { return enemyHeight; } // getter for enemy height
+    float getAttackRadius() const { return attackRadius; } // getter for attack radius
+    int getXpOnDrop() const { return xpOnDrop; } // getter for XP on drop
+    int getCoinsOnDrop() const { return coinsOnDrop; } // getter for coins on drop
+    int getDamage() const { return damage; } // getter for damage dealt by Reaper
+    bool isMeleeEnemy() const { return isMelee; } // getter for melee enemy
+    bool isToBeDeleted() const { return toBeDeleted; } // getter for toBeDeleted flag
+    bool getIsAttacking() const { return isAttacking; } // getter for isAttacking flag
+    int getIsAttackingAnimation() const { return isAttackingAnimation; } // getter for isAttackingAnimation
+    void setIsAttackingAnimation(int value) { isAttackingAnimation = value; } // setter for isAttackingAnimation
+    void setToBeDeleted(bool deleted) { toBeDeleted = deleted; } // setter for toBeDeleted flag
+    void setHealth(int health) { this->health = health; } // setter for health
+    void setMaxHealth(int maxHealth) { this->maxHealth = maxHealth; } // setter for max health
+    void setDamage(int damage) { this->damage = damage; } // setter for damage
+    void setXpOnDrop(int xp) { xpOnDrop = xp; } // setter for XP on drop
+    void setCoinsOnDrop(int coins) { coinsOnDrop = coins; } // setter for coins on drop
+    void setIsMelee(bool isMelee) { this->isMelee = isMelee; } // setter for isMelee flag
+    void setSpeed(float speed) { this->speed = speed; } // setter for speed
+    void setMaxSpeed(float maxSpeed) { this->maxSpeed = maxSpeed; } // setter for max speed
+    void setAttackRadius(float radius) { attackRadius = radius; } // setter for attack radius
+    void setEnemyWidth(float width) { enemyWidth = width; } // setter for enemy width
+    void setEnemyHeight(float height) { enemyHeight = height; } // setter for enemy height
+    void setAttackCooldown(int cooldown) { attackCooldown = cooldown; } // setter for attack cooldown
+    void setAttackCooldownStart(int cooldownStart) { attackCooldownStart = cooldownStart; } // setter for attack cooldown start
+    void setCanAttack(bool canAttack) { this->canAttack = canAttack; } // setter for canAttack flag
+    void setVx(float vx) { this->vx = vx; } // setter for x velocity
+    void setVy(float vy) { this->vy = vy; } // setter for y velocity
+    void setX(float x) { this->x = x; } // setter for x position
+    void setY(float y) { this->y = y; } // setter for y position
+    void setAnimation(int animation) { this->animation = animation; } // setter for animation
+    void setIsAttacking(bool isAttacking) { this->isAttacking = isAttacking; } // setter for isAttacking flag
+    void setIsMeleeEnemy(bool isMelee) { this->isMelee = isMelee; } // setter for isMelee flag
+    void setEnemyBrain(const EnemyBrain& ai) { this->ai = ai; } // setter for AI
+    EnemyBrain getEnemyBrain() const { return ai; } // getter for AI
+
+    ~EnemyReaper() {
+        // destructor
+    }
+};
 
 // clasa de bani
 class Coin {
@@ -2617,6 +2829,7 @@ vector<ExpOrb> mapExpOrbs; // container pentru orb-urile de exp din harta
 // inamici & entitati
 vector<EnemyGoblin> mapGoblins; // container pentru inamicii de tip goblin
 vector<EnemyBaphomet> mapBaphomets; // container pentru inamicii de tip Baphomet
+vector<EnemyReaper> mapReapers; // container pentru inamicii de tip Reaper
 EnemySkeletron *mapSkeletron;
 // noduri skilltree
 skillTreeNode skills[10]; // container pentru nodurile de skill tree
@@ -2730,6 +2943,12 @@ void controls(RenderWindow& window) {
             leftClick = false; // reset left click to prevent multiple arrows being fired in one frame
         }
     }
+
+    // debug key (L) that skips levelProgres to 8900
+    if (keysPressed[static_cast<int>(Keyboard::Key::L)]) {  // daca tasta L este apasata
+        levelProgress = 8900; // seteaza progresul nivelului la 8900
+        cout << "DEBUG: Skipped to level progress 8900" << endl; // afiseaza mesaj de debug
+    }
 }
 
 // -------------------------------------------------------------------- initializare --------------------------------------------------------------------
@@ -2756,6 +2975,14 @@ void init() {
     TextureManager::getInstance().justLoad("Goblinset");
     // enemy baphomet
     TextureManager::getInstance().justLoad("Baphometset");
+    // as face un set si pentru reaper da nu e timp...
+    TextureManager::getInstance().justLoad("enemy_reaper_move_1");
+    TextureManager::getInstance().justLoad("enemy_reaper_move_1_mirror");
+    TextureManager::getInstance().justLoad("enemy_reaper_move_2");
+    TextureManager::getInstance().justLoad("enemy_reaper_move_2_mirror");
+    TextureManager::getInstance().justLoad("enemy_reaper_attack");
+    TextureManager::getInstance().justLoad("enemy_reaper_attack_mirror");
+
     // justLoad all the files that start with "decoration_"
     for (const auto& entry : std::filesystem::directory_iterator("./res/")) {
         if (entry.path().filename().string().find("decoration_") == 0) {
@@ -3112,6 +3339,30 @@ void updateEnemySpawns(RenderWindow& window) {
         if (frameCount % 200 == 0) {
             mapGoblins.push_back(EnemyGoblin(800, rand_uniform(50, 550), 100, 10, true));
             cout << "DEBUG: Spawned goblin cuz progress = " << levelProgress << std::endl;
+        }
+    } else if (levelProgress >= 2000 && levelProgress < 5000) {
+        // if level between 2000-3000, spawn goblins every 150 frames
+        if (frameCount % 150 == 0) {
+            mapGoblins.push_back(EnemyGoblin(800, rand_uniform(50, 550), 100, 15, true));
+            cout << "DEBUG: Spawned goblin cuz progress = " << levelProgress << std::endl;
+        }
+        // and spawn baphomets every 400 frames
+        if (frameCount % 400 == 0) {
+            mapBaphomets.push_back(EnemyBaphomet(800, rand_uniform(50, 550)));
+            cout << "DEBUG: Spawned baphomet cuz progress = " << levelProgress << std::endl;
+        }
+        // reapers everry 600 frames
+        if (frameCount % 600 == 0) {
+            mapReapers.push_back(EnemyReaper(800, rand_uniform(50, 550)));
+            cout << "DEBUG: Spawned reaper cuz progress = " << levelProgress << std::endl;
+        }
+    }
+    // bla bla end level
+    if (levelProgress >= 9000 && levelProgress < 10000) {
+        // if levelProgress > 9000, spawn reapers every 100 frames
+        if (frameCount % 300 == 0) {
+            mapReapers.push_back(EnemyReaper(800, rand_uniform(50, 550)));
+            cout << "DEBUG: Spawned reaper cuz progress = " << levelProgress << std::endl;
         }
     }
 }
@@ -3605,6 +3856,18 @@ void drawEnemies(RenderWindow& window) {
         if (enemy.isToBeDeleted()) {
             auto it = remove_if(mapBaphomets.begin(), mapBaphomets.end(), [](EnemyBaphomet& e) { return e.isToBeDeleted(); });
             mapBaphomets.erase(it, mapBaphomets.end()); // sterge inamicul din vector
+        }
+    }
+
+    // REAPERS
+    for (EnemyReaper& enemy : mapReapers) {
+        enemy.update(window); // actualizeaza inamicul
+        enemy.draw(window); // deseneaza inamicul
+
+        // delete inamic daca este autodistrus
+        if (enemy.isToBeDeleted()) {
+            auto it = remove_if(mapReapers.begin(), mapReapers.end(), [](EnemyReaper& e) { return e.isToBeDeleted(); });
+            mapReapers.erase(it, mapReapers.end()); // sterge inamicul din vector
         }
     }
 
