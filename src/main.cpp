@@ -271,6 +271,7 @@ struct ItemObject {
 };
 
 vector<ItemObject> worldItems;
+void pickupSoundEffect();
 
 class Inventory {
 private:
@@ -302,10 +303,12 @@ public:
                 if (firstWeapon.item.type == ItemType::Null) {
                     firstWeapon = itemobj;
                     std::cout << "Weapon assigned to slot 1\n";
+                    pickupSoundEffect();  // Play pickup sound effect
                     return true;
                 } else if (secondWeapon.item.type == ItemType::Null) {
                     secondWeapon = itemobj;
                     std::cout << "Weapon assigned to slot 2\n";
+                    pickupSoundEffect();  // Play pickup sound effect
                     return true;
                 } else {
                     std::cout << "Both weapon slots are full\n";
@@ -734,6 +737,15 @@ public:
             cout << "Trying to load sound: " << name << endl;
 
             loadSound(name, name);  // incarca sunetul daca nu este gasit
+
+            // daca sunetul a fost incarcat, reda-l
+            if (sounds.find(name) != sounds.end()) {
+                sounds[name]->setVolume(volume);  // seteaza volumul
+                sounds[name]->play();
+                cout << "Sound loaded and played: " << name << endl;
+            } else {
+                cout << "Failed to load sound: " << name << endl;  // daca nu a reusit sa il incarce
+            }
         }
     }
 
@@ -755,6 +767,10 @@ public:
         soundBuffers.clear();
     }
 };
+
+void pickupSoundEffect() {
+    SoundManager::getInstance().playSound("pickup", 55);  // Play the pickup sound effect
+}
 
 class bgmManager {
 public:
@@ -790,6 +806,21 @@ public:
         currentIndex = dist(rng);
         playCurrent(volume);
         playing = true;
+    }
+
+    // Play specific file
+    void playFile(const std::string& filename, int volume = 50) {
+        if (!music)
+            music = std::make_unique<sf::Music>();
+        if (!music->openFromFile(filename)) {
+            std::cerr << "Failed to open BGM: " << filename << std::endl;
+            return;
+        }
+        music->setLooping(true);
+        music->setVolume(static_cast<float>(volume));
+        music->play();
+        playing = true;
+        currentVolume = volume;
     }
 
     // Stop playback
@@ -3483,6 +3514,13 @@ void updateProgress(RenderWindow& window) {
             bossSpawned = true;
             mapSkeletron = new EnemySkeletron(500, 300);  // spawn Skeletron boss
             std::cout << "DEBUG: Boss spawned at progress: " << levelProgress << std::endl;
+            
+            bgmManager::getInstance().stop();
+            bgmManager::getInstance().playFile("./res/boss.mp3");
+        }
+        if (bossDefeated) {
+            bgmManager::getInstance().stop();
+            bgmManager::getInstance().playRandom();
         }
     }
 
