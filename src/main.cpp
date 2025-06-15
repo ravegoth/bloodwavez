@@ -35,7 +35,6 @@ using namespace sf;
 
 // -------------------------------------------------------------------- constante --------------------------------------------------------------------
 const int FPS_LIMIT = 60;    // limita de cadre pe secunda
-const int SPEED_LIMIT = 4;   // 3px/sec
 const bool RELEASE = false;  // flag pentru release (true = release, false = debug)
 
 constexpr int INVENTORY_WIDTH = 600;
@@ -63,6 +62,7 @@ View skillTree;
 View playerView;
 
 // -------------------------------------------------------------------- variabile globale legate de joc --------------------------------------------------------------------
+float SPEED_LIMIT = 4;   // 3px/sec
 bool mouseDown = false;           // flag: true daca mouse-ul este apasat
 bool leftClick = false;           // flag: true daca butonul stang a fost apasat
 bool rightClick = false;          // flag: true daca butonul drept a fost apasat
@@ -85,7 +85,7 @@ int pickupRadius = 40;               // raza de pickup pentru obiecte
 bool canFireArrows = false;        // flag pentru a verifica daca se poate trage cu arcul
 string arrowType = "arrow_basic";  // tipul sagetii pe care o trage jucatorul
 int arrowSpeed = 5;                // viteza sagetii
-int arrowDamage = 10;              // damage-ul sagetii
+int arrowDamage = 20;              // damage-ul sagetii
 int arrowCooldown = 60;            // cooldown-ul pentru tragerea cu arcul (in frame-uri)
 int currentBowCooldown = 0;        // cooldown-ul curent pentru arcul jucatorului
 
@@ -745,7 +745,7 @@ public:
     }
 
     // metoda pentru a reda un sunet
-    void playSound(const string& name, int volume = 30) {
+    void playSound(const string& name, int volume = 5) {
         if (sounds.find(name) != sounds.end()) {
             // seteaza volumul la 100% (sau orice altceva vrei)
             sounds[name]->setVolume(volume);  // seteaza volumul
@@ -789,7 +789,7 @@ public:
 
 // tre definita aici ca na... pickupu e intre soundmanager si ... pickups..
 void pickupSoundEffect() {
-    SoundManager::getInstance().playSound("pickup", 55);  // Play the pickup sound effect
+    SoundManager::getInstance().playSound("pickup", 30);  // Play the pickup sound effect
 }
 
 class bgmManager {
@@ -816,7 +816,7 @@ public:
     }
 
     // Start playing a random track
-    void playRandom(int volume = 50) {
+    void playRandom(int volume = 5) {
         if (playlist.empty()) {
             std::cerr << "Playlist is empty. Call loadAll() first." << std::endl;
             return;
@@ -829,7 +829,7 @@ public:
     }
 
     // Play specific file
-    void playFile(const std::string& filename, int volume = 50) {
+    void playFile(const std::string& filename, int volume = 5) {
         if (!music)
             music = std::make_unique<sf::Music>();
         if (!music->openFromFile(filename)) {
@@ -862,7 +862,7 @@ public:
     }
 
 private:
-    bgmManager() : currentIndex(0), playing(false), currentVolume(50) {}
+    bgmManager() : currentIndex(0), playing(false), currentVolume(5) {}
     ~bgmManager() { stop(); }
     bgmManager(const bgmManager&) = delete;
     bgmManager& operator=(const bgmManager&) = delete;
@@ -2133,7 +2133,7 @@ public:
     std::string attackTexture;
 
     int health = 0;
-    int maxHealth = 200;
+    int maxHealth = 3000;
     bool active = true;
     bool attacking = false;
     float baseX;
@@ -2254,6 +2254,9 @@ public:
             active = false;
             return true;  // Part destroyed
         }
+
+        SoundManager::getInstance().playSound("hit_enemy");
+
         return false;
     }
 
@@ -2425,7 +2428,7 @@ public:
             headNeutralPositionVy += sin(angleToPlayer) * dt * 2.0f;
         }
         // if under player, move up a little
-        if (headNeutralPosition.y < playerY) {
+        if (headNeutralPosition.y > playerY - 100) {
             headNeutralPositionVy -= 1;
         }
         // if in the left of the player (x < 200), move right a little
@@ -2502,8 +2505,8 @@ public:
             swordHitbox1.y < head.position.y + head.spriteSize / 2 &&
             headCanAttack) {
             takeDamage(playerDamageMultiplier * currentHoldingSwordDamage, "head");
-            headNeutralPositionVx += 5 * cos(atan2(head.position.y - playerY, head.position.x - 200));
-            headNeutralPositionVy += 5 * sin(atan2(head.position.y - playerY, head.position.x - 200));
+            headNeutralPositionVx += 1.5 * cos(atan2(head.position.y - playerY, head.position.x - 200));
+            headNeutralPositionVy += 1.5 * sin(atan2(head.position.y - playerY, head.position.x - 200));
         }
 
         if (swordHitbox1.x > palmLeft.position.x - palmLeft.spriteSize / 2 &&
@@ -2511,8 +2514,8 @@ public:
             swordHitbox1.y > palmLeft.position.y - palmLeft.spriteSize / 2 &&
             swordHitbox1.y < palmLeft.position.y + palmLeft.spriteSize / 2) {
             takeDamage(playerDamageMultiplier * currentHoldingSwordDamage, "palmLeft");
-            headNeutralPositionVx += 5 * cos(atan2(palmLeft.position.y - playerY, palmLeft.position.x - 200));
-            headNeutralPositionVy += 5 * sin(atan2(palmLeft.position.y - playerY, palmLeft.position.x - 200));
+            headNeutralPositionVx += 1.5 * cos(atan2(palmLeft.position.y - playerY, palmLeft.position.x - 200));
+            headNeutralPositionVy += 1.5 * sin(atan2(palmLeft.position.y - playerY, palmLeft.position.x - 200));
         }
 
         if (swordHitbox1.x > palmRight.position.x - palmRight.spriteSize / 2 &&
@@ -2520,8 +2523,8 @@ public:
             swordHitbox1.y > palmRight.position.y - palmRight.spriteSize / 2 &&
             swordHitbox1.y < palmRight.position.y + palmRight.spriteSize / 2) {
             takeDamage(playerDamageMultiplier * currentHoldingSwordDamage, "palmRight");
-            headNeutralPositionVx += 5 * cos(atan2(palmRight.position.y - playerY, palmRight.position.x - 200));
-            headNeutralPositionVy += 5 * sin(atan2(palmRight.position.y - playerY, palmRight.position.x - 200));
+            headNeutralPositionVx += 1.5 * cos(atan2(palmRight.position.y - playerY, palmRight.position.x - 200));
+            headNeutralPositionVy += 1.5 * sin(atan2(palmRight.position.y - playerY, palmRight.position.x - 200));
         }
 
         if (swordHitbox2.x > head.position.x - head.spriteSize / 2 &&
@@ -2530,8 +2533,8 @@ public:
             swordHitbox2.y < head.position.y + head.spriteSize / 2 &&
             headCanAttack) {
             takeDamage(playerDamageMultiplier * currentHoldingSwordDamage, "head");
-            headNeutralPositionVx += 5 * cos(atan2(head.position.y - playerY, head.position.x - 200));
-            headNeutralPositionVy += 5 * sin(atan2(head.position.y - playerY, head.position.x - 200));
+            headNeutralPositionVx += 1.5 * cos(atan2(head.position.y - playerY, head.position.x - 200));
+            headNeutralPositionVy += 1.5 * sin(atan2(head.position.y - playerY, head.position.x - 200));
         }
 
         if (swordHitbox2.x > palmLeft.position.x - palmLeft.spriteSize / 2 &&
@@ -2539,8 +2542,8 @@ public:
             swordHitbox2.y > palmLeft.position.y - palmLeft.spriteSize / 2 &&
             swordHitbox2.y < palmLeft.position.y + palmLeft.spriteSize / 2) {
             takeDamage(playerDamageMultiplier * currentHoldingSwordDamage, "palmLeft");
-            headNeutralPositionVx += 5 * cos(atan2(palmLeft.position.y - playerY, palmLeft.position.x - 200));
-            headNeutralPositionVy += 5 * sin(atan2(palmLeft.position.y - playerY, palmLeft.position.x - 200));
+            headNeutralPositionVx += 1.5 * cos(atan2(palmLeft.position.y - playerY, palmLeft.position.x - 200));
+            headNeutralPositionVy += 1.5 * sin(atan2(palmLeft.position.y - playerY, palmLeft.position.x - 200));
         }
 
         if (swordHitbox2.x > palmRight.position.x - palmRight.spriteSize / 2 &&
@@ -2548,8 +2551,8 @@ public:
             swordHitbox2.y > palmRight.position.y - palmRight.spriteSize / 2 &&
             swordHitbox2.y < palmRight.position.y + palmRight.spriteSize / 2) {
             takeDamage(playerDamageMultiplier * currentHoldingSwordDamage, "palmRight");
-            headNeutralPositionVx += 5 * cos(atan2(palmRight.position.y - playerY, palmRight.position.x - 200));
-            headNeutralPositionVy += 5 * sin(atan2(palmRight.position.y - playerY, palmRight.position.x - 200));
+            headNeutralPositionVx += 1.5 * cos(atan2(palmRight.position.y - playerY, palmRight.position.x - 200));
+            headNeutralPositionVy += 1.5 * sin(atan2(palmRight.position.y - playerY, palmRight.position.x - 200));
         }
 
         // now the player takes damage if its part.itsTouchingPlayer() is true
@@ -3099,8 +3102,8 @@ void controls(RenderWindow& window) {
     if (keysPressed[static_cast<int>(Keyboard::Key::Space)]) {  // daca tasta Space este apasata
         if (canDash) {
             dashing = true;         // activeaza dash-ul
-            playerVx *= dashSpeed;  // seteaza viteza de dash
-            playerVy *= dashSpeed;  // seteaza viteza de dash
+            if (playerVx > 1000 + playerVy) playerVx *= dashSpeed/5;  // seteaza viteza de dash
+            else playerVy *= dashSpeed;  // seteaza viteza de dash
         }
     }
 
@@ -3292,6 +3295,11 @@ void updateEquipmentEffects(RenderWindow& window);
 
 void update(RenderWindow& window) {  // ! MAIN UPDATE --------------------------
     // limiteaza pozitia jucatorului in fereastra
+
+    // adjust based of speedMultipliers[speedSkillLevel]
+    SPEED_LIMIT *= speedMultipliers[speedSkillLevel];
+    SPEED_LIMIT *= speedMultipliers[speedSkillLevel];
+
     if (playerY < 0)
         playerY = 0;
     if (playerY > 600)
@@ -3347,10 +3355,6 @@ void update(RenderWindow& window) {  // ! MAIN UPDATE --------------------------
             }
         }
     }
-
-    // adjust based of speedMultipliers[speedSkillLevel]
-    playerVx *= speedMultipliers[speedSkillLevel];
-    playerVy *= speedMultipliers[speedSkillLevel];
 
     // actualizeaza pozitia jucatorului in functie de viteza si input-ul tastaturii
     playerX += playerVx;
@@ -3539,6 +3543,7 @@ void update(RenderWindow& window) {  // ! MAIN UPDATE --------------------------
 
     // update equipment effects
     updateEquipmentEffects(window);
+    SPEED_LIMIT = 4;
 }
 
 void updateArrows(RenderWindow& window) {
@@ -3943,6 +3948,10 @@ void drawPlayerWeapon(RenderWindow& window) {
         currentHoldingSwordDamage = 25;  // Damage specific pentru ice sword
     }
 
+    if (playerHolding != "weapon_basic_sword" && playerHolding != "weapon_ice_sword") {
+        swordHitbox1 = Vector2f(-999, -999);
+        swordHitbox2 = Vector2f(-999, -999);
+    }
 
     if (playerHolding == "weapon_basic_bow") {
         Texture& texture = TextureManager::getInstance().find("weapon_basic_bow");
