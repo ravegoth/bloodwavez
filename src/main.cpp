@@ -1,3 +1,7 @@
+// copyright (c) 2025-prezent, bloodwavez
+// e un singur fisier cu un scop
+// navigarea se face sarind la functii
+
 // specific c++ includes
 #include <algorithm>    // pentru algoritmi standard (sort, etc.)
 #include <cmath>        // pentru functii matematice (sqrt, pow, etc.)
@@ -58,7 +62,7 @@ float distance(Vector2<T> a, Vector2<T> b) {
 View skillTree;
 View playerView;
 
-// -------------------------------------------------------------------- variabile globale legate de joc
+// -------------------------------------------------------------------- variabile globale legate de joc --------------------------------------------------------------------
 bool mouseDown = false;           // flag: true daca mouse-ul este apasat
 bool leftClick = false;           // flag: true daca butonul stang a fost apasat
 bool rightClick = false;          // flag: true daca butonul drept a fost apasat
@@ -114,15 +118,15 @@ float totalDamageIncrease = 0;      // totalul de %damage increase al jucatorulu
 
 bool skillTreeDown = true;  // folosit pt schimbarea intre playerView si skillTreeView
 
-int speedSkillLevel = 0;
-std::vector<float> speedMultipliers = {1.0f, 1.01f, 1.02f, 1.03f, 1.04f, 1.06f};
+int speedSkillLevel = 0; // pt skillpoint-ul de speed
+std::vector<float> speedMultipliers = {1.0f, 1.01f, 1.02f, 1.03f, 1.04f, 1.06f}; // multiplicatorii de viteza pentru skill-ul de speed
 
 // folosit pt inventar si pickuping
 sf::Font uiFont;
-int nearbyItemIndex;
-bool inventoryVisible = false;
-bool openedInventoryThisPress = false;
-bool pressedE = false;
+int nearbyItemIndex; // indexul itemului din inventar care este in apropierea jucatorului
+bool inventoryVisible = false; // flag pentru a verifica daca inventarul este vizibil
+bool openedInventoryThisPress = false; // flag pentru a verifica daca inventarul a fost deschis in aceasta apasare de tasta
+bool pressedE = false; // flag pentru a verifica daca tasta E a fost apasata
 
 // boss spawnat
 bool bossSpawned = false;  // flag pentru a verifica daca boss-ul a fost spawnat
@@ -133,9 +137,9 @@ bool inHell = false;  // flag pentru a verifica daca jucatorul este in infern
 
 // ---------------------------------------------------- functii folosite de obiecte (forward decl) -----------------------------------------------------------
 
-void spawnCoinAt(float x, float y);
-void spawnXPAt(float x, float y);
-void playerTakeDamage(int amount);
+void spawnCoinAt(float x, float y); // spawneaza o moneda la coordonatele date
+void spawnXPAt(float x, float y); // spawneaza un XP orb la coordonatele date
+void playerTakeDamage(int amount); // aplica damage jucatorului
 
 // -------------------------------------------------------------------- obiecte --------------------------------------------------------------------
 
@@ -180,6 +184,7 @@ public:
         return instance;
     }
 
+    // metoda pentru a incarca si returna textura
     sf::Texture& find(const std::string& name) {
         std::string filename = "./res/" + name + ".png";
         // verifica daca textura este deja incarcata
@@ -193,6 +198,7 @@ public:
         return textures[filename];  // returneaza textura incarcata
     }
 
+    // metoda pentru a incarca textura fara a o returna
     void justLoad(const std::string& name) {
         std::string filename = "./res/" + name + ".png";
         // verifica daca textura este deja incarcata
@@ -230,6 +236,7 @@ struct Item {
     sf::Sprite sprite;
     sf::Vector2f position;
 
+    // constructor pentru a initializa un item
     Item(std::string name, std::string description, std::string texturePath, ItemType type)
         : name(name), description(description), texturePath(texturePath), type(type), sprite(TextureManager::getInstance().find(texturePath)) {
         sf::Texture texture = TextureManager::getInstance().find(texturePath);
@@ -242,6 +249,7 @@ struct Item {
     }
 };
 
+// structura pentru a reprezenta un obiect de tip Item in lume
 struct ItemObject {
     double x, y;    // coordonatele obiectului
     double radius;  // raza obiectului
@@ -270,9 +278,11 @@ struct ItemObject {
     }
 };
 
+// vector global pentru a stoca item-urile din lume
 vector<ItemObject> worldItems;
 void pickupSoundEffect();
 
+// functie pentru a adauga un item in lume
 class Inventory {
 private:
     ItemObject firstWeapon;
@@ -327,6 +337,7 @@ public:
         return false;
     }
 
+    // metoda pentru a verifica daca jucatorul are un item in inventar
     void removeEquipment(int index) {
         if (index >= 0 && index < static_cast<int>(stackables.size())) {
             ItemObject removedItem = stackables[index];
@@ -342,6 +353,7 @@ public:
         }
     }
 
+    // metoda pentru a verifica daca jucatorul are un item in inventar
     void dropWeapon(int slot) {
         ItemObject dropped;
 
@@ -531,6 +543,7 @@ public:
         // deseneaza sloturile de echipament
         drawEquipmentGrid(window);
 
+        // deseneaza tooltip-ul daca este hover pe un slot
         if (hoveredIndex != -100) {
             sf::Text shadow = tooltipText;
             shadow.setFillColor(sf::Color::Black);
@@ -570,6 +583,7 @@ public:
             window.draw(slot);
         }
 
+        // deseneaza itemele din echipament
         for (size_t i = 0; i < equipment.size(); ++i) {
             int col = i % COLUMNS;
             int row = i / COLUMNS;
@@ -615,11 +629,13 @@ public:
             }
         }
 
+        // verifica daca mouse-ul este deasupra sloturilor de arme
         if (weaponSlots[0].getGlobalBounds().contains(mousePos))
             hoveredIndex = -1;
         if (weaponSlots[1].getGlobalBounds().contains(mousePos))
             hoveredIndex = -2;
 
+        // daca inventarul este vizibil, verifica daca mouse-ul este deasupra unui slot 
         if (sf::Mouse::isButtonPressed(sf::Mouse::Button::Left)) {
             if (hoveredIndex != -100 && removedItemOnClick == false) {
                 onRemoveItem(hoveredIndex);
@@ -687,8 +703,10 @@ public:
     }
 };
 
+// instantiem inventarul global
 InventoryWindow inventoryWindow(uiFont);
 
+// clasa pentru a gestiona sunetele
 class SoundManager {
 private:
     map<string, SoundBuffer> soundBuffers;       // mapa pentru a stoca buffer-ele de sunet incarcate
@@ -702,6 +720,7 @@ public:
     SoundManager(const SoundManager&) = delete;
     SoundManager& operator=(const SoundManager&) = delete;
 
+    // pt ca-i singleton..
     static SoundManager& getInstance() {
         static SoundManager instance;  // instanta unica
         return instance;
@@ -768,6 +787,7 @@ public:
     }
 };
 
+// tre definita aici ca na... pickupu e intre soundmanager si ... pickups..
 void pickupSoundEffect() {
     SoundManager::getInstance().playSound("pickup", 55);  // Play the pickup sound effect
 }
@@ -864,6 +884,7 @@ private:
         currentVolume = volume;
     }
 
+    // Member variables
     std::vector<std::string> playlist;
     std::unique_ptr<sf::Music> music;
     std::mt19937 rng;
@@ -872,6 +893,7 @@ private:
     int currentVolume;
 };
 
+// clasa pentru a reprezenta un tile in lume / backgroundu
 class Tile {
 private:
     float x, y;           // coordonatele tile-ului
@@ -951,6 +973,8 @@ public:
             sprite.setScale(Vector2f(1.25, 1.25));
             window.draw(sprite);  // deseneaza sprite-ul
         }
+
+        // asteae de mai jos e pt cand e in iad (9500+)
 
         // if type == "hell1"
         if (type == "hell1") {
@@ -2093,6 +2117,7 @@ public:
     void setToBeDeleted(bool toBeDeleted) { this->toBeDeleted = toBeDeleted; }  // setter pentru flag-ul de autodistrugere
 };
 
+// clasa pentru partile la boss
 class SkeletronPart {
 public:
     Vector2f position;
@@ -2145,6 +2170,7 @@ public:
         }
     }
 
+    // fct pt incarcarea texturii
     void loadTexture(const std::string& texName) {
         if (texName == "") {
             return;
@@ -2154,15 +2180,19 @@ public:
         sprite.setPosition(position);
     }
 
+    // sa urmareasca un target
     void follow(Vector2f target, float dt, bool attacking = false) {
+        // Update the position of the part to follow the target
         this->attacking = attacking;
 
+        // Load the appropriate texture based on the attacking state
         if (attacking) {
             loadTexture(attackTexture);
         } else {
             loadTexture(normalTexture);
         }
-
+        
+        // dac nu e activ nu face nmk
         Vector2f direction = target - position;
         float dist = std::sqrt(direction.x * direction.x + direction.y * direction.y);
 
@@ -2170,6 +2200,7 @@ public:
 
         Vector2f directionNormalised = direction;
 
+        // normalizeaza directia daca distanta > 0
         if (dist > 0)
             directionNormalised /= dist;  // Normalize
 
@@ -2177,6 +2208,7 @@ public:
             position = target;
         }
 
+        // daca distanta > 1, se misca
         if (dist > 1.f) {
             // Calculate speed based on distance (further = faster)
             float speedFactor = dist * (attacking ? 1.f : 0.5f);
@@ -2206,10 +2238,12 @@ public:
         }
     }
 
+    // hitbox player
     bool isTouchingPlayer() const {
         return distance(position, Vector2f(200, playerY)) < (spriteSize / 2.f);
     }
 
+    // partea primeste damage
     bool takeDamage(int amount) {
         if (!active)
             return false;
@@ -2223,6 +2257,7 @@ public:
         return false;
     }
 
+    // partea se misca in functie de player ca orice da pa joc
     void applyWorldMovement() {
         // Update base position with world movement
         baseX += playerVx;
@@ -2239,6 +2274,7 @@ public:
     }
 };
 
+// ! bossu 
 class EnemySkeletron : public Enemy {
 public:
     SkeletronPart head;
@@ -2315,6 +2351,7 @@ public:
         srand(static_cast<unsigned int>(time(nullptr)));
     }
 
+    // bosu ia damage si unde
     void takeDamage(int amount, const std::string& partName) {
         bool partDestroyed = false;
 
@@ -2819,6 +2856,7 @@ public:
     int getCurrentAlloc() { return currentAlloc; }
 };
 
+// clasa pentru sageti
 class Arrow {
 public:
     float x, y;
@@ -3039,6 +3077,8 @@ void playerTakeDamage(int damage) {
         playerHealth -= damage;  // scade din viata
     }
 }
+
+// mai erea pickup sound effect da mie lene sal mut aici sincer..
 
 // -------------------------------------------------------------------- controale --------------------------------------------------------------------
 void controls(RenderWindow& window) {
@@ -3550,6 +3590,7 @@ void updateProgress(RenderWindow& window) {
     }
 }
 
+// cand se spawneaza chestii
 void updateEnemySpawns(RenderWindow& window) {
     // if level between 500-1000, spawn goblins every 300 frames
     if (levelProgress > 500 && levelProgress < 1000) {
@@ -3596,6 +3637,7 @@ void updateEnemySpawns(RenderWindow& window) {
     }
 }
 
+// cand se spawneaza decoratii
 void updateDecorationSpawns(RenderWindow& window) {
     // from level 0 to 1000, spawn decoration_rock every 100 frames
     if (levelProgress >= 0 && levelProgress < 1000) {
@@ -3794,8 +3836,8 @@ void drawPlayerAt(RenderWindow& window, float x, float y, float speed = 0, float
     window.draw(sprite);                      // deseneaza sprite-ul
 }
 
+// deseneaza informatiile despre itemul din apropiere
 void drawItemInfo(sf::RenderWindow& window) {
-    // deseneaza informatiile despre itemul din apropiere
 
     if (nearbyItemIndex == -1)
         return;  // nu este niciun item in apropiere
@@ -4030,7 +4072,7 @@ void drawText(RenderWindow& window) {
     // show lvl and money under the bars
     Font font;
     if (!font.openFromFile("./res/PixelPurl.ttf")) {
-        cout << "Failed to load font: PixelPurl.ttf" << endl;
+        cout << "Failed to load font: PixelPurl.ttf" << endl; // todo: asta trebe optimizat da mi-e lene
         return;
     }
 
@@ -4358,3 +4400,5 @@ int main() {
     }
     return 0;  // intoarce 0 la terminarea executiei
 }
+
+// copyright (c) 2025-prezent bloodwavez
