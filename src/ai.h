@@ -48,6 +48,31 @@ public:
     }
 
     friend class Network;
+
+    ~Neuron() {
+        // Destructor to clean up resources if needed
+    }
+    Neuron(const Neuron& other) : weights(other.weights), bias(other.bias) {
+        // Copy constructor
+    }
+    Neuron& operator=(const Neuron& other) {
+        if (this != &other) {
+            weights = other.weights;
+            bias = other.bias;
+        }
+        return *this;
+    }
+    Neuron(Neuron&& other) noexcept : weights(std::move(other.weights)), bias(other.bias) {
+        // Move constructor
+    }
+    Neuron& operator=(Neuron&& other) noexcept {
+        if (this != &other) {
+            weights = std::move(other.weights);
+            bias = other.bias;
+        }
+        return *this;
+    }
+    Neuron() = default; // Default constructor for Neuron
 };
 
 
@@ -165,6 +190,31 @@ public:
         }
         cout << "------------------------------------" << endl;
     }
+
+    ~Network() {
+        
+    }
+    Network(const Network& other) : hiddenLayers(other.hiddenLayers), outputLayer(other.outputLayer) {
+        // Copy constructor
+    }
+    Network& operator=(const Network& other) {
+        if (this != &other) {
+            hiddenLayers = other.hiddenLayers;
+            outputLayer = other.outputLayer;
+        }
+        return *this;
+    }
+    Network(Network&& other) noexcept : hiddenLayers(std::move(other.hiddenLayers)), outputLayer(std::move(other.outputLayer)) {
+        // Move constructor
+    }
+    Network& operator=(Network&& other) noexcept {
+        if (this != &other) {
+            hiddenLayers = std::move(other.hiddenLayers);
+            outputLayer = std::move(other.outputLayer);
+        }
+        return *this;
+    }
+    Network() = default; // Default constructor for Network
 };
 
 class EnemyBrain {
@@ -189,8 +239,8 @@ public:
         };
         auto output = brain.result(inputs);
         bool towardsPlayer = output[0];
-        double moveAngle = output[1] * 360.0; // Convert to degrees
-        return {towardsPlayer ? 1.0 : -1.0, moveAngle}; // Return 1.0 for towards player, -1.0 for away
+        double moveAngle = output[1] * 180.0 + 180.0; 
+        return {towardsPlayer > 0 ? 1.0 : -1.0, moveAngle};
     }
 
     void setBrainFromNetwork(const Network& newBrain) {
@@ -199,6 +249,10 @@ public:
 
     Network getBrain() const {
         return brain;
+    }
+
+    ~EnemyBrain() {
+        // Destructor to clean up resources if needed
     }
 };
 
@@ -224,7 +278,7 @@ public:
         };
         auto output = brain.result(inputs);
         bool shoot = output[0] > 0; // If output[0] > 0, shoot
-        double moveAngle = output[1] * 360.0; // Convert to degrees
+        double moveAngle = output[1] * 180.0 + 180.0; // Convert to degrees and adjust to 0-360 range
         return {shoot ? 1.0 : 0.0, moveAngle}; // Return 1.0 for shoot, 0.0 for not shoot
     }
 
