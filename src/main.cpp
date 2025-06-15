@@ -3490,6 +3490,9 @@ void update(RenderWindow& window) {  // ! MAIN UPDATE --------------------------
             spawnXPAt(400 + rand_uniform(-50, 50), 300 + rand_uniform(-50, 50));
         }
 
+        // spawn the trophy item
+        worldItems.push_back(ItemObject(400, 300, 10, Item("Endgame Trophy", "Makes you immortal", "trophy_endgame", ItemType::Equipment)));
+
         // message box cu you win
         MessageBoxA(NULL, "You defeated the boss!", "Victory", MB_OK | MB_ICONINFORMATION);  // afiseaza mesaj de victorie
     }
@@ -3737,10 +3740,18 @@ void updateDecorationSpawns(RenderWindow& window) {
 
 void updateEquipmentEffects(RenderWindow& window) {
     // update equipment effects based on equipped items
-    if (playerHolding == "equipment_purple_gloves") {
+    if (std::any_of(playerInventory.getEquipment().begin(), playerInventory.getEquipment().end(), 
+                    [](const ItemObject& item) { return item.item.texturePath == "equipment_purple_gloves"; })) {
         // reduce dash cooldown by 50%
         dashCooldown -= 1;  // reduce cooldown by 1 frame
         // cout << "DEBUG: Dash cooldown reduced to " << dashCooldown << endl;
+    }
+    // if it has trophy_endgame, make player immortal (set health to max health)
+    if (std::any_of(playerInventory.getEquipment().begin(), playerInventory.getEquipment().end(), 
+                    [](const ItemObject& item) { return item.item.texturePath == "trophy_endgame"; })) {
+        playerHealth = playerMaxHealth;  // set health to max health
+        playerArmor = playerMaxArmor;    // set armor to max armor
+        cout << "DEBUG: Player is now immortal!" << endl;
     }
 }
 
