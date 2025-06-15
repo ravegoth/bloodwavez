@@ -3011,7 +3011,7 @@ vector<ExpOrb> mapExpOrbs;          // container pentru orb-urile de exp din har
 vector<EnemyGoblin> mapGoblins;      // container pentru inamicii de tip goblin
 vector<EnemyBaphomet> mapBaphomets;  // container pentru inamicii de tip Baphomet
 vector<EnemyReaper> mapReapers;      // container pentru inamicii de tip Reaper
-EnemySkeletron* mapSkeletron;
+std::unique_ptr<EnemySkeletron> mapSkeletron; // pt boss (eu sunt un boss sincer ca am scris tot codu asta)
 // noduri skilltree
 skillTreeNode skills[10];    // container pentru nodurile de skill tree
 vector<Arrow> playerArrows;  // container pentru sageti
@@ -3479,7 +3479,7 @@ void update(RenderWindow& window) {  // ! MAIN UPDATE --------------------------
     if (mapSkeletron != nullptr && !mapSkeletron->head.active && (!bossDefeated)) {
         bossDefeated = true;
         std::cout << "DEBUG: Boss defeated!" << std::endl;
-        delete mapSkeletron;
+        mapSkeletron.reset();
         mapSkeletron = nullptr;
 
         // Reward player with coins and XP
@@ -3504,7 +3504,7 @@ void update(RenderWindow& window) {  // ! MAIN UPDATE --------------------------
 void updateArrows(RenderWindow& window) {
     for (auto& arrow : playerArrows) {
         // update each arrow's position and check for collisions
-        arrow.update(mapGoblins, mapBaphomets, mapReapers, mapSkeletron, bossSpawned);
+        arrow.update(mapGoblins, mapBaphomets, mapReapers, mapSkeletron.get(), bossSpawned);
     }
 
     // Remove arrows that are marked for deletion (hit edge or enemy)
@@ -3519,7 +3519,7 @@ void updateProgress(RenderWindow& window) {
 
         if (levelProgress >= 9500 && !bossSpawned) {  // spawn boss after 10,000 progress
             bossSpawned = true;
-            mapSkeletron = new EnemySkeletron(500, 300);  // spawn Skeletron boss
+            mapSkeletron = std::make_unique<EnemySkeletron>(500, 300);
             std::cout << "DEBUG: Boss spawned at progress: " << levelProgress << std::endl;
             
             bgmManager::getInstance().stop();
@@ -4150,7 +4150,7 @@ void drawEnemies(RenderWindow& window) {
         }
 
         if (mapSkeletron->isToBeDeleted()) {
-            delete mapSkeletron;
+            mapSkeletron.reset();
         }
     }
 }
