@@ -3208,11 +3208,11 @@ void init() {
     // mapObjects.push_back(Object(500, 300, 30, Color::Magenta));
     // mapObjects.push_back(Object(600, 170, 40, Color::Cyan));
 
-    worldItems.push_back(ItemObject(350, 150, 10, Item("Sword", "Basic sword, 11 damag", "weapon_basic_sword", ItemType::Weapon)));
-    worldItems.push_back(ItemObject(3000, 300, 11, Item("Sword", "Ice sword, 25 damag", "weapon_ice_sword", ItemType::Weapon)));
-    worldItems.push_back(ItemObject(350, 650, 10, Item("Bow", "Basic bow, 10 damage", "weapon_basic_bow", ItemType::Weapon)));
+    worldItems.push_back(ItemObject(1000, 300, 10, Item("Sword", "Basic sword, 11 damag", "weapon_basic_sword", ItemType::Weapon)));
+    worldItems.push_back(ItemObject(9000, 300, 11, Item("Sword", "Ice sword, 25 damag", "weapon_ice_sword", ItemType::Weapon)));
+    worldItems.push_back(ItemObject(2000, 300, 10, Item("Bow", "Basic bow, 10 damage", "weapon_basic_bow", ItemType::Weapon)));
     worldItems.push_back(
-        ItemObject(250, 250, 10, Item("Puple Gloves", "Puple forces lie within these gloves", "equipment_purple_gloves", ItemType::Equipment)));
+        ItemObject(4050, 330, 10, Item("Puple Gloves", "Lower dashing cooldown", "equipment_purple_gloves", ItemType::Equipment)));
 
     // init player pos
     playerX = 200;
@@ -3248,6 +3248,7 @@ void updateArrows(RenderWindow& window);
 void updateProgress(RenderWindow& window);
 void updateEnemySpawns(RenderWindow& window);
 void updateDecorationSpawns(RenderWindow& window);
+void updateEquipmentEffects(RenderWindow& window);
 
 void update(RenderWindow& window) {  // ! MAIN UPDATE --------------------------
     // limiteaza pozitia jucatorului in fereastra
@@ -3492,6 +3493,9 @@ void update(RenderWindow& window) {  // ! MAIN UPDATE --------------------------
         // message box cu you win
         MessageBoxA(NULL, "You defeated the boss!", "Victory", MB_OK | MB_ICONINFORMATION);  // afiseaza mesaj de victorie
     }
+
+    // update equipment effects
+    updateEquipmentEffects(window);
 }
 
 void updateArrows(RenderWindow& window) {
@@ -3728,6 +3732,15 @@ void updateDecorationSpawns(RenderWindow& window) {
             mapDecorations.push_back(Decoration(rand_uniform(800, 800), rand_uniform(50, 550), "decoration_rock"));
             cout << "DEBUG: Spawned decoration_rock cuz progress = " << levelProgress << std::endl;
         }
+    }
+}
+
+void updateEquipmentEffects(RenderWindow& window) {
+    // update equipment effects based on equipped items
+    if (playerHolding == "equipment_purple_gloves") {
+        // reduce dash cooldown by 50%
+        dashCooldown -= 1;  // reduce cooldown by 1 frame
+        // cout << "DEBUG: Dash cooldown reduced to " << dashCooldown << endl;
     }
 }
 
