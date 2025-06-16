@@ -2,7 +2,7 @@
 
 **bloodwavez** is a 2D top-down pixel art game where you play as a warrior progressing through increasingly difficult levels filled with enemies and bosses. Defeat them using various weapons, collect gold and XP, unlock new skills through a skill tree, and improve your character via meta-progression. The game features smart enemy AI powered by neural networks, a dynamic inventory system, pixel-perfect sprite work, and immersive background music and sound effects.
 
-[Video demo](https://drive.google.com/file/d/12GsTIZ8TaY4HDv8UsjclCytK9eBauRf8/view?usp=sharing)
+[View video demo](https://drive.google.com/file/d/1cHuSf3AdqzctMaZXP4qXpxJKE00FMNnx/view?usp=sharing)
 
 ## Controls
 
